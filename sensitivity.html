@@ -52,10 +52,10 @@
                     </div>
 
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Policy Implementation ($v_t$)</label>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Policy Implementation Year ($v_t$)</label>
                         <input type="number" id="vtInput" value="0" min="0" max="41"
                                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none">
-                        <p class="text-[10px] text-slate-400 mt-1">정책이 도입되는 시점(년)을 설정합니다.</p>
+                        <p class="text-[10px] text-slate-400 mt-1">정책 도입 시점 (0=처음부터, 41=도입안함). 이 시점 이후 입사자에게 백신 적용.</p>
                     </div>
 
                     <button id="runSweepBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-all shadow-md active:scale-95">
@@ -204,6 +204,10 @@
          * - Baseline: v_t=50 (no vaccination), uses matrix_novac_to_full
          * - S#1: v_t=0 (vaccination from start), uses matrix_novac_to_neg (selective)
          * - S#2: v_t=0 (vaccination from start), uses matrix_novac_to_full (universal)
+         * 
+         * v_t parameter: Policy implementation year
+         * - Workers entering BEFORE v_t: No vaccination (natural immunity only)
+         * - Workers entering AT or AFTER v_t: Vaccination applied
          */
         function runSimulation(mu1, epsilon, vt, scenario) {
             const years = 41; // t_span
@@ -222,39 +226,58 @@
                     let yearsSinceChildhood = age - 5;
                     let [baseF, baseP, baseN] = getImmunityProfile(mu1, [yearsSinceChildhood])[0];
                     
+                    // Calculate workforce tenure
+                    let tenure = Math.max(0, age - 24);
+                    
+                    // Determine entry year: current_year(years) - tenure
+                    let entryYear = years - tenure;
+                    
                     if (scenario === 'base') {
-                        // Baseline: No vaccination
+                        // Baseline: No vaccination regardless of v_t
                         f = baseF; 
                         p = baseP; 
                         n = baseN;
                         
                     } else if (scenario === 's1') {
-                        // Scenario 1: Selective vaccination of seronegatives at entry (age 24)
+                        // Scenario 1: Selective vaccination (seronegatives only)
                         
-                        // Entry immunity at age 24 (19 years since MMR2 at age 5)
-                        let [entryF, entryP, entryN] = getImmunityProfile(mu1, [19])[0];
-                        
-                        // Workforce tenure
-                        let tenure = Math.max(0, age - 24);
-                        
-                        // Post-vaccination immunity (starts from tenure 0 for vaccinated)
-                        let [vaxF, vaxP, vaxN] = getImmunityProfile(mu1, [tenure])[0];
-                        
-                        // Weighted combination:
-                        // - Fraction (1-entryN) were seropositive at entry → natural waning continues
-                        // - Fraction entryN were seronegative at entry → vaccinated → tenure-based waning
-                        f = baseF * (1 - entryN) + vaxF * entryN;
-                        p = baseP * (1 - entryN) + vaxP * entryN;
-                        n = baseN * (1 - entryN) + vaxN * entryN;
+                        if (entryYear < vt) {
+                            // Entered BEFORE policy → No vaccination
+                            f = baseF; 
+                            p = baseP; 
+                            n = baseN;
+                        } else {
+                            // Entered AT or AFTER policy → Selective vaccination
+                            
+                            // Entry immunity at age 24 (19 years since MMR2 at age 5)
+                            let [entryF, entryP, entryN] = getImmunityProfile(mu1, [19])[0];
+                            
+                            // Post-vaccination immunity (tenure-based for vaccinated)
+                            let [vaxF, vaxP, vaxN] = getImmunityProfile(mu1, [tenure])[0];
+                            
+                            // Weighted combination:
+                            // - Fraction (1-entryN) were seropositive → natural waning continues
+                            // - Fraction entryN were seronegative → vaccinated → tenure-based waning
+                            f = baseF * (1 - entryN) + vaxF * entryN;
+                            p = baseP * (1 - entryN) + vaxP * entryN;
+                            n = baseN * (1 - entryN) + vaxN * entryN;
+                        }
                         
                     } else if (scenario === 's2') {
-                        // Scenario 2: Universal vaccination at entry (age 24)
-                        // Everyone gets vaccinated → immunity follows tenure-based waning
-                        let tenure = Math.max(0, age - 24);
-                        let [vaxF, vaxP, vaxN] = getImmunityProfile(mu1, [tenure])[0];
-                        f = vaxF; 
-                        p = vaxP; 
-                        n = vaxN;
+                        // Scenario 2: Universal vaccination
+                        
+                        if (entryYear < vt) {
+                            // Entered BEFORE policy → No vaccination
+                            f = baseF; 
+                            p = baseP; 
+                            n = baseN;
+                        } else {
+                            // Entered AT or AFTER policy → Everyone vaccinated
+                            let [vaxF, vaxP, vaxN] = getImmunityProfile(mu1, [tenure])[0];
+                            f = vaxF; 
+                            p = vaxP; 
+                            n = vaxN;
+                        }
                     }
                     
                 } else if (age <= 52 + years) { 
@@ -264,8 +287,12 @@
                     p = 0;
                     n = 1 - f;
                     
-                    if (scenario === 's2') { 
-                        // In S#2, G2 cohort also gets booster → 100% full immunity
+                    // Calculate workforce tenure for G2 cohort
+                    let tenure = Math.max(0, age - 24);
+                    let entryYear = years - tenure;
+                    
+                    if (scenario === 's2' && entryYear >= vt) { 
+                        // In S#2, G2 cohort entering at/after v_t gets booster → 100% full immunity
                         f = 1; 
                         p = 0; 
                         n = 0;
@@ -357,6 +384,11 @@
         }
 
         async function runSensitivitySweep() {
+            const button = document.getElementById('runSweepBtn');
+            const originalText = button.innerHTML;
+            button.innerHTML = '⏳ 계산 중...';
+            button.disabled = true;
+            
             const epsilon = parseFloat(document.getElementById('epsilonInput').value) || 0;
             const vt = parseInt(document.getElementById('vtInput').value) || 0;
             const muRange = Array.from({length: 23}, (_, i) => i + 1);
@@ -390,6 +422,12 @@
             document.getElementById('statBaseFull').innerText = (bF * 100).toFixed(1) + "%";
             document.getElementById('statS1Gain').innerText = "+" + ((s1F - bF) * 100).toFixed(1) + "%";
             document.getElementById('statS2Gain').innerText = "+" + ((s2F - bF) * 100).toFixed(1) + "%";
+            
+            button.innerHTML = '✓ 완료!';
+            setTimeout(() => {
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }, 1000);
         }
 
         // --- 4. Initialization ---
