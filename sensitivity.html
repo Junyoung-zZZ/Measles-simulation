@@ -1,449 +1,818 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>의료종사자 홍역 면역 전략 민감도 분석</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        .chart-container {
-            position: relative;
-            width: 100%;
-            height: 350px;
-        }
-        .control-card {
-            background: #ffffff;
-            border-radius: 1rem;
-            padding: 1.5rem;
-            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-        }
-        input[type="range"] {
-            accent-color: #2563eb;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>의료종사자 홍역 면역 전략 민감도 분석 (epsilon only)</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- jStat: gamma pdf/cdf -->
+  <script src="https://cdn.jsdelivr.net/npm/jstat@1.9.6/dist/jstat.min.js"></script>
+
+  <style>
+    .chart-container { position: relative; width: 100%; height: 350px; }
+    .control-card { background: #ffffff; border-radius: 1rem; padding: 1.5rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+    input[type="range"] { accent-color: #2563eb; }
+  </style>
 </head>
+
 <body class="bg-slate-50 text-slate-900 font-sans leading-relaxed">
 
-    <!-- Header -->
-    <header class="bg-white border-b border-slate-200 sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-            <div class="flex items-center gap-2">
-                <span class="text-2xl">🏥</span>
-                <h1 class="text-lg font-bold text-slate-800">HCW Measles Immunity Strategy Dashboard</h1>
-            </div>
-            <div class="text-xs text-slate-400 font-mono">Based on MATLAB mu_1_sensitivity.m</div>
+<header class="bg-white border-b border-slate-200 sticky top-0 z-50">
+  <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <span class="text-2xl">🏥</span>
+      <h1 class="text-lg font-bold text-slate-800">HCW Measles Immunity Strategy Dashboard</h1>
+    </div>
+    <div class="text-xs text-slate-400 font-mono">MATLAB logic: mu_1_sensitivity.m</div>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-6 py-10 space-y-10">
+
+  <section class="grid lg:grid-cols-3 gap-8">
+    <!-- Controls -->
+    <div class="lg:col-span-1 space-y-6">
+
+      <div class="control-card space-y-4">
+        <h2 class="text-sm font-bold text-slate-500 uppercase tracking-wider">입력 (epsilon only)</h2>
+
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Turnover Scaling (ε)</label>
+          <input type="number" id="epsilonInput" value="0.5" step="0.01" min="0"
+                 class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none">
+          <p class="text-[10px] text-slate-400 mt-1">pde_pop.m의 out_amt / inflow_weight에 동일하게 반영됩니다.</p>
         </div>
-    </header>
 
-    <main class="max-w-7xl mx-auto px-6 py-10 space-y-10">
+        <button id="runBtn"
+                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-all shadow-md active:scale-95">
+          🔄 실행 (μ1=1..23 Sweep)
+        </button>
 
-        <!-- Intro Section -->
-        <section class="grid lg:grid-cols-3 gap-8">
-            <div class="lg:col-span-1 space-y-6">
-                <div class="control-card space-y-4">
-                    <h2 class="text-sm font-bold text-slate-500 uppercase tracking-wider">글로벌 파라미터 설정</h2>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Turnover Scaling ($\epsilon$)</label>
-                        <input type="number" id="epsilonInput" value="0" step="0.01" min="0" 
-                               class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none">
-                        <p class="text-[10px] text-slate-400 mt-1">이직률을 조절하여 인구 구조의 유동성을 설정합니다.</p>
-                    </div>
+        <div class="text-[11px] text-slate-500">
+          <div class="font-mono">t_span = 41 (고정)</div>
+          <div class="font-mono">Baseline: matrix_novac_to_full, v_t=50</div>
+          <div class="font-mono">S#1: matrix_novac_to_neg, v_t=0</div>
+          <div class="font-mono">S#2: matrix_novac_to_full, v_t=0</div>
+        </div>
 
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Policy Implementation Year ($v_t$)</label>
-                        <input type="number" id="vtInput" value="0" min="0" max="41"
-                               class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none">
-                        <p class="text-[10px] text-slate-400 mt-1">정책 도입 시점 (0=처음부터, 41=도입안함). 이 시점 이후 입사자에게 백신 적용.</p>
-                    </div>
+        <div id="status" class="text-[11px] text-slate-500"></div>
+      </div>
 
-                    <button id="runSweepBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-all shadow-md active:scale-95">
-                        🔄 민감도 분석 실행 (Sweep)
-                    </button>
-                </div>
+      <!-- Individual Profile (optional display only) -->
+      <div class="control-card">
+        <h2 class="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">G1 개인 면역 감소 프로필 (Est_imm)</h2>
+        <label class="block text-xs font-semibold text-slate-600 mb-2">
+          μ1: <span id="mu1Display" class="text-blue-600">12</span>
+        </label>
+        <input type="range" id="mu1Slider" min="1" max="23" value="12" class="w-full mb-4">
+        <div class="chart-container" style="height: 200px;">
+          <canvas id="individualChart"></canvas>
+        </div>
+        <p class="text-[10px] text-slate-400 mt-2">
+          이 차트는 sweep 결과에 영향을 주지 않고, Est_imm 형태를 “참고용”으로만 표시합니다.
+        </p>
+      </div>
+    </div>
 
-                <div class="control-card">
-                    <h2 class="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">G1 개인 면역 감소 프로필</h2>
-                    <label class="block text-xs font-semibold text-slate-600 mb-2">
-                        $\mu_1$ (완전 면역 지속 기간): <span id="mu1Display" class="text-blue-600">12</span>년
-                    </label>
-                    <input type="range" id="mu1Slider" min="1" max="23" value="12" class="w-full mb-4">
-                    <div class="chart-container" style="height: 200px;">
-                        <canvas id="individualChart"></canvas>
-                    </div>
-                </div>
-            </div>
+    <!-- Context + 3 charts -->
+    <div class="lg:col-span-2 space-y-6">
+      <div class="bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
+        <h2 class="text-2xl font-bold mb-4 text-slate-800">Result 2 (mu_1_sensitivity.m) – epsilon 입력 버전</h2>
+        <p class="text-slate-600 text-sm leading-relaxed mb-6">
+          MATLAB 코드와 동일하게, μ1(1~23)을 sweep하며 각 시나리오에서 최종 시점(t_span=41)의
+          <strong>S_Full / S_Part / S_Neg</strong> 비율을 계산합니다.
+          입력은 ε 하나이며, v_t는 시나리오별로 하드코딩되어 있습니다.
+        </p>
 
-            <!-- Analysis Context -->
-            <div class="lg:col-span-2 space-y-6">
-                <div class="bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
-                    <h2 class="text-2xl font-bold mb-4 text-slate-800">민감도 분석 (Steady State Analysis)</h2>
-                    <p class="text-slate-600 text-sm leading-relaxed mb-6">
-                        $\mu_1$이 1년에서 23년까지 변할 때, 병원 전체의 면역 상태 비중이 어떻게 변화하는지 세 가지 시나리오별로 관찰합니다. 
-                        이는 연구 보고서의 <strong>Result 2</strong> 데이터를 동적으로 생성한 결과입니다.
-                    </p>
-                    
-                    <div class="grid grid-cols-3 gap-4">
-                        <div class="text-center p-3 bg-slate-50 rounded-xl border border-slate-100">
-                            <h4 class="text-[10px] font-bold text-slate-400 uppercase mb-1">Baseline</h4>
-                            <p class="text-xs text-slate-600">미접종 유지</p>
-                        </div>
-                        <div class="text-center p-3 bg-blue-50 rounded-xl border border-blue-100">
-                            <h4 class="text-[10px] font-bold text-blue-400 uppercase mb-1">Scenario 1</h4>
-                            <p class="text-xs text-blue-600">선별 접종 (S#1)</p>
-                        </div>
-                        <div class="text-center p-3 bg-indigo-50 rounded-xl border border-indigo-100">
-                            <h4 class="text-[10px] font-bold text-indigo-400 uppercase mb-1">Scenario 2</h4>
-                            <p class="text-xs text-indigo-600">전원 접종 (S#2)</p>
-                        </div>
-                    </div>
-                </div>
+        <div class="grid grid-cols-3 gap-4">
+          <div class="text-center p-3 bg-slate-50 rounded-xl border border-slate-100">
+            <h4 class="text-[10px] font-bold text-slate-400 uppercase mb-1">Baseline</h4>
+            <p class="text-xs text-slate-600">to_full, v_t=50</p>
+          </div>
+          <div class="text-center p-3 bg-blue-50 rounded-xl border border-blue-100">
+            <h4 class="text-[10px] font-bold text-blue-400 uppercase mb-1">Scenario 1</h4>
+            <p class="text-xs text-blue-600">to_neg, v_t=0</p>
+          </div>
+          <div class="text-center p-3 bg-indigo-50 rounded-xl border border-indigo-100">
+            <h4 class="text-[10px] font-bold text-indigo-400 uppercase mb-1">Scenario 2</h4>
+            <p class="text-xs text-indigo-600">to_full, v_t=0</p>
+          </div>
+        </div>
+      </div>
 
-                <!-- Three Panel Chart -->
-                <div class="grid lg:grid-cols-3 gap-4">
-                    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
-                        <h3 class="text-xs font-bold text-center text-slate-400 mb-3">(A) Baseline</h3>
-                        <div class="chart-container"><canvas id="chartBase"></canvas></div>
-                    </div>
-                    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
-                        <h3 class="text-xs font-bold text-center text-slate-400 mb-3">(B) Scenario 1</h3>
-                        <div class="chart-container"><canvas id="chartS1"></canvas></div>
-                    </div>
-                    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
-                        <h3 class="text-xs font-bold text-center text-slate-400 mb-3">(C) Scenario 2</h3>
-                        <div class="chart-container"><canvas id="chartS2"></canvas></div>
-                    </div>
-                </div>
-            </div>
-        </section>
+      <div class="grid lg:grid-cols-3 gap-4">
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+          <h3 class="text-xs font-bold text-center text-slate-400 mb-3">(A) Baseline</h3>
+          <div class="chart-container"><canvas id="chartBase"></canvas></div>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+          <h3 class="text-xs font-bold text-center text-slate-400 mb-3">(B) Scenario 1</h3>
+          <div class="chart-container"><canvas id="chartS1"></canvas></div>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+          <h3 class="text-xs font-bold text-center text-slate-400 mb-3">(C) Scenario 2</h3>
+          <div class="chart-container"><canvas id="chartS2"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </section>
 
-        <!-- Summary Statistics -->
-        <section class="bg-slate-900 text-white rounded-3xl p-8 shadow-2xl overflow-hidden relative">
-            <div class="absolute top-0 right-0 w-64 h-64 bg-blue-600/10 rounded-full -mr-32 -mt-32 blur-3xl"></div>
-            <h2 class="text-xl font-bold mb-6 flex items-center gap-2">
-                <span>📊</span> 현재 설정 하의 Steady State 요약
-            </h2>
-            <div class="grid md:grid-cols-3 gap-8">
-                <div class="space-y-2">
-                    <span class="text-xs text-slate-400 uppercase">Baseline Immunity</span>
-                    <div class="flex items-baseline gap-2">
-                        <span id="statBaseFull" class="text-3xl font-bold text-blue-400">0.0%</span>
-                        <span class="text-sm text-slate-500">Full</span>
-                    </div>
-                    <p class="text-[10px] text-slate-500">정책 미도입 시 최종 도달 면역 수준</p>
-                </div>
-                <div class="space-y-2">
-                    <span class="text-xs text-slate-400 uppercase">Scenario 1 Improvement</span>
-                    <div class="flex items-baseline gap-2">
-                        <span id="statS1Gain" class="text-3xl font-bold text-emerald-400">+0.0%</span>
-                    </div>
-                    <p class="text-[10px] text-slate-500">선별 접종 시 Baseline 대비 완전 면역 증가분</p>
-                </div>
-                <div class="space-y-2">
-                    <span class="text-xs text-slate-400 uppercase">Scenario 2 Improvement</span>
-                    <div class="flex items-baseline gap-2">
-                        <span id="statS2Gain" class="text-3xl font-bold text-indigo-400">+0.0%</span>
-                    </div>
-                    <p class="text-[10px] text-slate-500">전원 접종 시 Baseline 대비 완전 면역 증가분</p>
-                </div>
-            </div>
-        </section>
+  <section class="bg-slate-900 text-white rounded-3xl p-8 shadow-2xl overflow-hidden relative">
+    <div class="absolute top-0 right-0 w-64 h-64 bg-blue-600/10 rounded-full -mr-32 -mt-32 blur-3xl"></div>
+    <h2 class="text-xl font-bold mb-6 flex items-center gap-2"><span>📊</span> 현재 ε에서 요약 (μ1=12 기준)</h2>
+    <div class="grid md:grid-cols-3 gap-8">
+      <div class="space-y-2">
+        <span class="text-xs text-slate-400 uppercase">Baseline Full</span>
+        <div class="flex items-baseline gap-2">
+          <span id="statBaseFull" class="text-3xl font-bold text-blue-400">0.0%</span>
+          <span class="text-sm text-slate-500">Full</span>
+        </div>
+      </div>
+      <div class="space-y-2">
+        <span class="text-xs text-slate-400 uppercase">Scenario 1 Gain</span>
+        <div class="flex items-baseline gap-2">
+          <span id="statS1Gain" class="text-3xl font-bold text-emerald-400">+0.0%</span>
+        </div>
+      </div>
+      <div class="space-y-2">
+        <span class="text-xs text-slate-400 uppercase">Scenario 2 Gain</span>
+        <div class="flex items-baseline gap-2">
+          <span id="statS2Gain" class="text-3xl font-bold text-indigo-400">+0.0%</span>
+        </div>
+      </div>
+    </div>
+  </section>
 
-    </main>
+</main>
 
-    <footer class="max-w-7xl mx-auto px-6 py-10 border-t border-slate-200 text-center text-slate-400 text-xs">
-        <p>본 시뮬레이터는 MATLAB 연구 코드를 웹 표준 기술로 구현한 시각화 도구입니다.</p>
-        <p class="mt-2">Copyright © 2024 Measles Immunity Study Group. All Rights Reserved.</p>
-    </footer>
+<footer class="max-w-7xl mx-auto px-6 py-10 border-t border-slate-200 text-center text-slate-400 text-xs">
+  <p>본 시뮬레이터는 MATLAB 연구 코드를 웹 표준 기술로 구현한 시각화 도구입니다.</p>
+</footer>
 
-    <!-- Logic Script -->
-    <script>
-        // --- 1. Constant & Pop Distribution Data ---
-        const N_TOT = 2320;
-        const A_MAX = 42; // 연령 19~60세 (42개 구간)
-        // Age Distribution (D) from pde_pop.m
-        const D_RAW = [1,1,2,19,52,136,158,169,152,150,143,115,98,67,66,50,45,44,43,52,48,53,47,30,46,31,29,35,27,28,23,32,26,27,14,38,38,37,37,37,37,37];
-        const SUM_D_RAW = D_RAW.reduce((a, b) => a + b, 0);
-        const D = D_RAW.map(v => (v / SUM_D_RAW) * N_TOT);
+<script>
+/** =========================
+ * MATLAB constants
+ * ========================= */
+const N_TOT = 2320;
+const T_SPAN = 41;   // mu_1_sensitivity.m
+const MU_RANGE = Array.from({length: 23}, (_, i) => i + 1);
 
-        // G2 Immunity Profile (Stable) from matrix_*.m
-        const G2_DATA = [0.78,0.88,0.78,0.97,0.92,0.91,0.94,0.98,1.0,0.96,0.91,0.98,0.98,0.90,0.96,0.94,0.97,0.91,0.87,0.97,1.0,0.93,0.96,0.96,1.0,1.0,1.0,0.93];
+// colors (MATLAB)
+const C_FULL = 'rgb(0,77,189)';     // ~ [0.00, 0.3, 0.74]
+const C_PART = 'rgb(237,176,33)';   // ~ [0.93, 0.69, 0.13]
+const C_NEG  = 'rgb(230,26,26)';    // ~ [0.9, 0.1, 0.10]
 
-        // --- 2. Simulation Engine (MATLAB Logic Implemented in JS) ---
+/** =========================
+ * Numeric utilities
+ * ========================= */
+function clamp(x, lo, hi){ return Math.max(lo, Math.min(hi, x)); }
 
-        /**
-         * Calculates immunity transition for G1 cohort (Exponential decay)
-         * Equivalent to Est_imm.m using Gamma distribution approximation
-         */
-        function getImmunityProfile(mu1, ages) {
-            const mu2 = 24 - mu1;
-            const l1 = 1 / mu1;
-            const l2 = 1 / mu2;
-            const results = [];
+// Simpson integral on [0,t]
+function simpsonIntegrate(f, t, n){
+  if (t <= 0) return 0;
+  n = Math.max(200, Math.floor(n||400)); // reasonable default
+  if (n % 2 === 1) n += 1;
+  const h = t / n;
+  let s = f(0) + f(t);
+  for (let i=1; i<n; i++){
+    const x = i*h;
+    s += (i%2===0 ? 2 : 4) * f(x);
+  }
+  return (h/3) * s;
+}
 
-            ages.forEach(t => {
-                // t = years since age 5 (MMR2 vaccination)
-                let full = Math.exp(-l1 * t);
-                let part;
-                if (Math.abs(l1 - l2) < 1e-6) {
-                    part = l1 * t * Math.exp(-l1 * t);
-                } else {
-                    part = (l1 / (l2 - l1)) * (Math.exp(-l1 * t) - Math.exp(-l2 * t));
-                }
-                let neg = Math.max(0, 1 - full - part);
-                results.push([full, part, neg]);
-            });
-            return results;
+function gampdf(x, a, b){ if (x < 0) return 0; return jStat.gamma.pdf(x, a, b); }
+function gamcdf(x, a, b){ if (x < 0) return 0; return jStat.gamma.cdf(x, a, b); }
+
+/** =========================
+ * Est_imm(param, tspan)  (MATLAB 동일)
+ * param = [alpha1, mu1, alpha2, dummy]
+ * beta1 = mu1/alpha1, beta2 = (24-mu1)/alpha2
+ * P(t)=1-gamcdf(t,a1,b1)
+ * Neg(t)=∫ gampdf(u,a1,b1)*gamcdf(t-u,a2,b2)du + eps
+ * Part=1-P-Neg
+ * ========================= */
+function EstImm(param, tspan, intSteps){
+  const P0 = 1.0;
+  const alpha1 = param[0];
+  const mu1 = param[1];
+  const alpha2 = param[2];
+
+  const beta1 = mu1 / alpha1;
+  const beta2 = (24 - mu1) / alpha2;
+
+  const P = new Array(tspan.length);
+  const Part = new Array(tspan.length);
+  const Neg = new Array(tspan.length);
+
+  for (let i=0; i<tspan.length; i++){
+    const t = tspan[i];
+    const F1 = gamcdf(t, alpha1, beta1);
+    const P_t = P0 * (1 - F1);
+
+    if (t === 0){
+      P[i] = P_t;
+      Part[i] = Number.EPSILON;
+      Neg[i] = Number.EPSILON;
+    } else {
+      const integrand = (u) => gampdf(u, alpha1, beta1) * gamcdf(t-u, alpha2, beta2);
+      const neg = P0 * simpsonIntegrate(integrand, t, intSteps) + Number.EPSILON;
+      const part = 1 - P_t - neg;
+
+      P[i] = P_t;
+      Neg[i] = neg;
+      Part[i] = part;
+    }
+  }
+  // return IMM_G1: [Full, Part, Neg]
+  return { Full: P, Part, Neg };
+}
+
+/** =========================
+ * pde_pop(year, epsilon)  (MATLAB 동일)
+ * returns {C, P}
+ * C: 42 x year
+ * P: 42 x (year+1)
+ * ========================= */
+function pdePop(year, epsilon){
+  const Amax = 42;
+  const L = Amax;
+  const Ntot = 2320;
+
+  const y = [1,1,2,19,52,136,158,169,152,150,143,115,98,67,66,50,45,44,43,52,48,53,47,30,46,31,29,35,27,28,23,32,26,27,14,38,38,37,37,37,37,37].map(v => v/2320);
+  let D = y.slice(0, 42);
+  const sumD = D.reduce((a,b)=>a+b,0);
+  D = D.map(v => v/sumD * Ntot);
+
+  const Tmax = year;
+
+  const out_amt = new Array(L).fill(0);
+  for (let a=0; a<L-1; a++){
+    out_amt[a] = Math.max(D[a]-D[a+1], 0) + D[a]*epsilon;
+  }
+  out_amt[L-1] = D[L-1] + D[L-1]*epsilon;
+
+  const inflow_weight = new Array(L).fill(0);
+  inflow_weight[0] = D[0] + D[0]*epsilon;
+  for (let a=1; a<L; a++){
+    inflow_weight[a] = Math.max(D[a]-D[a-1], 0) + D[a]*epsilon;
+  }
+  let sumW = inflow_weight.reduce((a,b)=>a+b,0);
+  if (sumW > 0){
+    for (let a=0; a<L; a++) inflow_weight[a] /= sumW;
+  } else {
+    for (let a=0; a<L; a++) inflow_weight[a] = 1/L;
+  }
+
+  // P: L x (Tmax+1)
+  const P = Array.from({length:L}, ()=> new Array(Tmax+1).fill(0));
+  for (let a=0; a<L; a++) P[a][0] = D[a];
+
+  // C: L x Tmax
+  let C = Array.from({length:L}, ()=> new Array(Tmax).fill(0));
+
+  for (let t=1; t<=Tmax; t++){
+    let TotalStock, ExistingC;
+    if (t === 1){
+      ExistingC = []; // none
+      TotalStock = new Array(L);
+      for (let a=0; a<L; a++) TotalStock[a] = P[a][t-1];
+    } else {
+      // ExistingC = C(:,1:t-1)
+      TotalStock = new Array(L).fill(0);
+      for (let a=0; a<L; a++){
+        let s = P[a][t-1];
+        for (let k=0; k<t-1; k++) s += C[a][k];
+        TotalStock[a] = s;
+      }
+    }
+    for (let a=0; a<L; a++){
+      if (TotalStock[a] <= 0) TotalStock[a] = 1e-9;
+    }
+
+    const take = new Array(L);
+    for (let a=0; a<L; a++){
+      take[a] = Math.min(out_amt[a], Math.max(TotalStock[a], 0));
+    }
+
+    // out_P and P_after
+    const out_P = new Array(L);
+    const P_after = new Array(L);
+    for (let a=0; a<L; a++){
+      out_P[a] = (P[a][t-1] / TotalStock[a]) * take[a];
+      P_after[a] = Math.max(P[a][t-1] - out_P[a], 0);
+    }
+
+    // C_after
+    let C_after = Array.from({length:L}, ()=> new Array(t-1).fill(0));
+    let out_C_all_sum = 0;
+    if (t > 1){
+      for (let k=0; k<t-1; k++){
+        for (let a=0; a<L; a++){
+          const out_C_k = (C[a][k] / TotalStock[a]) * take[a];
+          const after = Math.max(C[a][k] - out_C_k, 0);
+          C_after[a][k] = after;
+          out_C_all_sum += out_C_k;
+        }
+      }
+    }
+
+    // aging P
+    const P_next = new Array(L).fill(0);
+    for (let a=1; a<L; a++){
+      P_next[a] = P_after[a-1];
+    }
+
+    // aging C into C_next
+    const C_next = Array.from({length:L}, ()=> new Array(Tmax).fill(0));
+    if (t > 1){
+      for (let k=0; k<t-1; k++){
+        for (let a=1; a<L; a++){
+          // aged_cohort(2:end) = C_after(1:end-1,k)
+          C_next[a][k+1] = C_after[a-1][k];
+        }
+      }
+    }
+
+    const out_total = out_P.reduce((s,x)=>s+x,0) + out_C_all_sum;
+    for (let a=0; a<L; a++){
+      C_next[a][0] = out_total * inflow_weight[a];
+    }
+
+    // record
+    for (let a=0; a<L; a++) P[a][t] = P_next[a];
+    C = C_next;
+  }
+
+  return { C, P };
+}
+
+/** =========================
+ * matrix_novac_to_full(param, year, v_t, epsilon)  (MATLAB 동일)
+ * out: pop_matrix = [Full, Part, Neg] each is (T+1) x 42 for final T=year
+ * ========================= */
+function matrixNoVacToFull(param, year, v_t, epsilon){
+  const tspan = Array.from({length: 51+20+year + 1}, (_,i)=>i); // 0:...
+  const IMM_G1 = EstImm(param, tspan, 400);
+
+  // IMM_G2 28 x 3
+  const g2full = [78,88,78,97,92,91,94,98,100,96,91,98,98,90,96,94,97,91,87,97,100,93,96,96,100,100,100,93].map(v=>v/100);
+  const IMM_G2 = g2full.map(v => [v, 0, 1-v]);
+
+  const Q0 = pdePop(year, epsilon).C; // 42 x year
+
+  let pop_matrix = null;
+
+  for (let T=1; T<=year; T++){
+    const res = pdePop(T, epsilon);
+    const P = res.P; // 42 x (T+1)
+
+    pop_matrix = [
+      Array.from({length:T+1}, ()=> new Array(42).fill(0)), // Full
+      Array.from({length:T+1}, ()=> new Array(42).fill(0)), // Part
+      Array.from({length:T+1}, ()=> new Array(42).fill(0)), // Neg
+    ];
+
+    const limit_idx = Math.min(7+T, 42);
+
+    // Incumbents: IMM_G1(15:14+limit_idx,i) .* P(1:limit_idx,T+1)
+    // MATLAB row r corresponds t = r-1. So row 15 => t=14.
+    for (let i=0; i<3; i++){
+      for (let a=0; a<limit_idx; a++){
+        const t_imm = 14 + a;
+        const imm = (i===0?IMM_G1.Full[t_imm] : i===1?IMM_G1.Part[t_imm] : IMM_G1.Neg[t_imm]);
+        pop_matrix[i][0][a] = imm * P[a][T];
+      }
+    }
+
+    // Recruits j=2..T+1
+    for (let j=2; j<=T+1; j++){
+      const tenure = j-1;
+      const recruit_year = T - tenure + 1;
+
+      let pop_count = new Array(limit_idx).fill(0);
+      if (tenure <= Q0[0].length){
+        for (let a=0; a<limit_idx; a++) pop_count[a] = Q0[a][tenure-1];
+      }
+
+      if (recruit_year <= v_t){
+        // unvaccinated: age-based IMM_G1(15..)
+        for (let i=0; i<3; i++){
+          for (let a=0; a<limit_idx; a++){
+            const t_imm = 14 + a;
+            const imm = (i===0?IMM_G1.Full[t_imm] : i===1?IMM_G1.Part[t_imm] : IMM_G1.Neg[t_imm]);
+            pop_matrix[i][j-1][a] = pop_count[a] * imm;
+          }
+        }
+      } else {
+        // vaccinated: tenure-based IMM_G1(j,i) => row j => t=j-1
+        let imm_idx_V = j;
+        if (imm_idx_V > tspan.length) imm_idx_V = tspan.length;
+        const tV = (imm_idx_V - 1);
+
+        for (let i=0; i<3; i++){
+          const immV = (i===0?IMM_G1.Full[tV] : i===1?IMM_G1.Part[tV] : IMM_G1.Neg[tV]);
+          for (let a=0; a<limit_idx; a++){
+            pop_matrix[i][j-1][a] = pop_count[a] * immV;
+          }
+        }
+      }
+    }
+
+    // G2/G3: i in [1,3] => Full & Neg only
+    for (const i of [0, 2]){ // 0=Full, 2=Neg
+      const idx_start = 8 + T;       // 1-based
+      const idx_end   = Math.min(42, 35 + T);
+      if (idx_start <= 42){
+        const start0 = idx_start - 1;
+        const end0 = idx_end - 1;
+        const len_req = end0 - start0 + 1;
+
+        let G2_probs = new Array(len_req).fill(0);
+        if (T > 7){
+          // g2_idx = T-6:28 (1-based), trim to len_req
+          const g2_idx = [];
+          for (let k=(T-6); k<=28; k++) g2_idx.push(k);
+          const g2_trim = g2_idx.slice(0, len_req).map(v=>v-1);
+          for (let m=0; m<len_req; m++){
+            G2_probs[m] = IMM_G2[g2_trim[m]][i];
+          }
+        } else {
+          for (let m=0; m<len_req; m++){
+            G2_probs[m] = IMM_G2[m][i];
+          }
         }
 
-        /**
-         * Runs the core matrix simulation logic matching MATLAB
-         * 
-         * MATLAB Logic from mu_1_sensitivity.m:
-         * - Baseline: v_t=50 (no vaccination), uses matrix_novac_to_full
-         * - S#1: v_t=0 (vaccination from start), uses matrix_novac_to_neg (selective)
-         * - S#2: v_t=0 (vaccination from start), uses matrix_novac_to_full (universal)
-         * 
-         * v_t parameter: Policy implementation year
-         * - Workers entering BEFORE v_t: No vaccination (natural immunity only)
-         * - Workers entering AT or AFTER v_t: Vaccination applied
-         */
-        function runSimulation(mu1, epsilon, vt, scenario) {
-            const years = 41; // t_span
-            
-            let totalF = 0, totalP = 0, totalN = 0;
+        // incumbents
+        for (let m=0; m<len_req; m++){
+          const a = start0 + m;
+          pop_matrix[i][0][a] = G2_probs[m] * P[a][T];
+        }
 
-            for (let a = 0; a < A_MAX; a++) {
-                let age = a + 19; // Ages 19-60
-                let popAtAge = D[a];
-                
-                let f, p, n;
+        // recruits
+        for (let j=2; j<=T+1; j++){
+          const tenure = j-1;
+          const recruit_year = T - tenure + 1;
 
-                // G1 Cohort (ages 19 to 65, born after 1994)
-                if (age <= 24 + years) {
-                    // Natural waning from age 5 (MMR2)
-                    let yearsSinceChildhood = age - 5;
-                    let [baseF, baseP, baseN] = getImmunityProfile(mu1, [yearsSinceChildhood])[0];
-                    
-                    // Calculate workforce tenure
-                    let tenure = Math.max(0, age - 24);
-                    
-                    // Determine entry year: current_year(years) - tenure
-                    let entryYear = years - tenure;
-                    
-                    if (scenario === 'base') {
-                        // Baseline: No vaccination regardless of v_t
-                        f = baseF; 
-                        p = baseP; 
-                        n = baseN;
-                        
-                    } else if (scenario === 's1') {
-                        // Scenario 1: Selective vaccination (seronegatives only)
-                        
-                        if (entryYear < vt) {
-                            // Entered BEFORE policy → No vaccination
-                            f = baseF; 
-                            p = baseP; 
-                            n = baseN;
-                        } else {
-                            // Entered AT or AFTER policy → Selective vaccination
-                            
-                            // Entry immunity at age 24 (19 years since MMR2 at age 5)
-                            let [entryF, entryP, entryN] = getImmunityProfile(mu1, [19])[0];
-                            
-                            // Post-vaccination immunity (tenure-based for vaccinated)
-                            let [vaxF, vaxP, vaxN] = getImmunityProfile(mu1, [tenure])[0];
-                            
-                            // Weighted combination:
-                            // - Fraction (1-entryN) were seropositive → natural waning continues
-                            // - Fraction entryN were seronegative → vaccinated → tenure-based waning
-                            f = baseF * (1 - entryN) + vaxF * entryN;
-                            p = baseP * (1 - entryN) + vaxP * entryN;
-                            n = baseN * (1 - entryN) + vaxN * entryN;
-                        }
-                        
-                    } else if (scenario === 's2') {
-                        // Scenario 2: Universal vaccination
-                        
-                        if (entryYear < vt) {
-                            // Entered BEFORE policy → No vaccination
-                            f = baseF; 
-                            p = baseP; 
-                            n = baseN;
-                        } else {
-                            // Entered AT or AFTER policy → Everyone vaccinated
-                            let [vaxF, vaxP, vaxN] = getImmunityProfile(mu1, [tenure])[0];
-                            f = vaxF; 
-                            p = vaxP; 
-                            n = vaxN;
-                        }
-                    }
-                    
-                } else if (age <= 52 + years) { 
-                    // G2 Cohort (older workers, born between 1966-1993)
-                    let g2Idx = Math.min(Math.max(0, age - 25), G2_DATA.length - 1);
-                    f = G2_DATA[g2Idx];
-                    p = 0;
-                    n = 1 - f;
-                    
-                    // Calculate workforce tenure for G2 cohort
-                    let tenure = Math.max(0, age - 24);
-                    let entryYear = years - tenure;
-                    
-                    if (scenario === 's2' && entryYear >= vt) { 
-                        // In S#2, G2 cohort entering at/after v_t gets booster → 100% full immunity
-                        f = 1; 
-                        p = 0; 
-                        n = 0;
-                    }
-                    
-                } else { 
-                    // G3 Cohort (oldest workers, born before 1966)
-                    // Assumed to have natural immunity
-                    f = 1; 
-                    p = 0; 
-                    n = 0;
-                }
-
-                totalF += f * popAtAge;
-                totalP += p * popAtAge;
-                totalN += n * popAtAge;
+          let pop_count = new Array(len_req).fill(0);
+          if (tenure <= Q0[0].length){
+            for (let m=0; m<len_req; m++){
+              const a = start0 + m;
+              pop_count[m] = Q0[a][tenure-1];
             }
+          }
 
-            return [totalF / N_TOT, totalP / N_TOT, totalN / N_TOT];
+          if (recruit_year <= v_t){
+            // unvaccinated
+            for (let m=0; m<len_req; m++){
+              const a = start0 + m;
+              pop_matrix[i][j-1][a] = pop_count[m] * G2_probs[m];
+            }
+          } else {
+            // vaccinated -> 100% Full
+            for (let m=0; m<len_req; m++){
+              const a = start0 + m;
+              if (i === 0) pop_matrix[i][j-1][a] = pop_count[m] * 1.0;
+              else pop_matrix[i][j-1][a] = 0.0;
+            }
+          }
+        }
+      }
+    }
+
+    // S3 fix (MATLAB 코드 그대로 유지)
+    const S3 = [38,38,37,37,37,37,37];
+    if (T < 7){
+      const from = 36 + T; // 1-based
+      for (let col=from; col<=42; col++){
+        const idx = col - from;
+        pop_matrix[0][0][col-1] = S3[idx];
+      }
+    }
+  }
+
+  return pop_matrix; // final T=year
+}
+
+/** =========================
+ * matrix_novac_to_neg(param, year, v_t, epsilon)  (MATLAB 동일)
+ * ========================= */
+function matrixNoVacToNeg(param, year, v_t, epsilon){
+  const tspan = Array.from({length: 51+20+year + 1}, (_,i)=>i);
+  const IMM_G1 = EstImm(param, tspan, 400);
+
+  const g2full = [78,88,78,97,92,91,94,98,100,96,91,98,98,90,96,94,97,91,87,97,100,93,96,96,100,100,100,93].map(v=>v/100);
+  const IMM_G2 = g2full.map(v => [v, 0, 1-v]);
+
+  const resY = pdePop(year, epsilon);
+  const Q0 = resY.C; // 42 x year
+  const G1_Neg = IMM_G1.Neg;
+
+  // Q1_ size(Q0)
+  const Q1_ = Array.from({length:42}, ()=> new Array(year).fill(0));
+
+  // policy loop
+  const max_row = 42;
+  for (let T=1; T<=year; T++){
+    if (T > v_t){
+      const idx_limit = Math.min(T + 7, max_row);
+
+      // Neg_vaccination = Q0(1:idx_limit,1) .* G1_Neg(19:(19-1)+idx_limit)
+      // MATLAB row 19 => t=18
+      const Neg_vaccination = new Array(idx_limit);
+      for (let a=0; a<idx_limit; a++){
+        Neg_vaccination[a] = Q0[a][0] * G1_Neg[18 + a];
+      }
+
+      // Q_ratio = [zeros(min(year-T,42),1); Neg_vaccination ./ Q0(1:idx_limit,1)];
+      const zerosLen = Math.min(year - T, 42);
+      const Q_ratio = [];
+      for (let z=0; z<zerosLen; z++) Q_ratio.push(0);
+
+      for (let a=0; a<idx_limit; a++){
+        const denom = Q0[a][0];
+        Q_ratio.push(denom > 0 ? (Neg_vaccination[a]/denom) : 0);
+      }
+
+      // assign Q1_(1:size(Q_ratio,1), year-T+1)
+      const col = year - T; // 0-based
+      const L = Math.min(42, Q_ratio.length);
+      for (let r=0; r<L; r++){
+        const v = Q_ratio[r];
+        Q1_[r][col] = Number.isFinite(v) ? v : 0;
+      }
+    }
+  }
+
+  // V = Q0.*Q1_, Q = Q0.*(1-Q1_)
+  const V = Array.from({length:42}, ()=> new Array(year).fill(0));
+  const Q = Array.from({length:42}, ()=> new Array(year).fill(0));
+  for (let a=0; a<42; a++){
+    for (let k=0; k<year; k++){
+      V[a][k] = Q0[a][k] * Q1_[a][k];
+      Q[a][k] = Q0[a][k] * (1 - Q1_[a][k]);
+    }
+  }
+
+  let pop_matrix = null;
+
+  for (let T=1; T<=year; T++){
+    const res = pdePop(T, epsilon);
+    const P = res.P;
+    const C = res.C;
+
+    pop_matrix = [
+      Array.from({length:T+1}, ()=> new Array(42).fill(0)),
+      Array.from({length:T+1}, ()=> new Array(42).fill(0)),
+      Array.from({length:T+1}, ()=> new Array(42).fill(0)),
+    ];
+
+    const idx_limit = Math.min(7+T, max_row);
+
+    for (let i=0; i<3; i++){
+      // incumbents
+      for (let a=0; a<idx_limit; a++){
+        const t_imm = 14 + a; // row 15 => t=14
+        const imm = (i===0?IMM_G1.Full[t_imm] : i===1?IMM_G1.Part[t_imm] : IMM_G1.Neg[t_imm]);
+        pop_matrix[i][0][a] = imm * P[a][T];
+      }
+
+      // recruits
+      for (let j=2; j<=T+1; j++){
+        for (let a=0; a<idx_limit; a++){
+          const t_age = 14 + a;
+          const imm_age = (i===0?IMM_G1.Full[t_age] : i===1?IMM_G1.Part[t_age] : IMM_G1.Neg[t_age]);
+
+          // IMM_G1(j-1,i) -> row (j-1) => t=(j-2)
+          const t_tenure = (j-2);
+          const imm_ten = (i===0?IMM_G1.Full[t_tenure] : i===1?IMM_G1.Part[t_tenure] : IMM_G1.Neg[t_tenure]);
+
+          const qPop = Q[a][j-2] ?? 0; // Q(., j-1) in MATLAB => col j-2
+          const vPop = V[a][j-2] ?? 0;
+
+          pop_matrix[i][j-1][a] = imm_age * qPop + imm_ten * vPop;
+        }
+      }
+    }
+
+    // G2/G3 (i=[1,3] only)
+    for (const i of [0,2]){
+      const idx_start = 8 + T;
+      const idx_end = Math.min(42, 35+T);
+      if (idx_start <= 42){
+        const start0 = idx_start - 1;
+        const end0 = idx_end - 1;
+        const len = end0 - start0 + 1;
+
+        // incumbents
+        for (let m=0; m<len; m++){
+          const a = start0 + m;
+          const g2row = (T > 7) ? clamp((T-6-1) + m, 0, 27) : m; // T-6:28 (1-based)
+          pop_matrix[i][0][a] = IMM_G2[g2row][i] * P[a][T];
         }
 
-        // --- 3. UI & Charting Logic ---
-
-        let charts = {
-            base: null,
-            s1: null,
-            s2: null,
-            ind: null
-        };
-
-        function initCharts() {
-            const config = (title, color) => ({
-                type: 'line',
-                data: {
-                    labels: Array.from({length: 23}, (_, i) => i + 1),
-                    datasets: [
-                        { label: 'Full', data: [], borderColor: '#3b82f6', backgroundColor: '#3b82f6', borderWidth: 2, pointRadius: 2, tension: 0.1 },
-                        { label: 'Part', data: [], borderColor: '#f59e0b', backgroundColor: '#f59e0b', borderWidth: 2, pointRadius: 2, tension: 0.1 },
-                        { label: 'Neg', data: [], borderColor: '#f43f5e', backgroundColor: '#f43f5e', borderWidth: 2, pointRadius: 2, tension: 0.1 }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: { min: 0, max: 1, ticks: { stepSize: 0.2 }, grid: { color: '#f1f5f9' } },
-                        x: { title: { display: true, text: 'μ1', font: { size: 10 } }, grid: { display: false } }
-                    },
-                    plugins: { legend: { display: false } }
-                }
-            });
-
-            charts.base = new Chart(document.getElementById('chartBase'), config('Baseline'));
-            charts.s1 = new Chart(document.getElementById('chartS1'), config('Scenario 1'));
-            charts.s2 = new Chart(document.getElementById('chartS2'), config('Scenario 2'));
-
-            // Individual Chart
-            charts.ind = new Chart(document.getElementById('individualChart'), {
-                type: 'line',
-                data: {
-                    labels: Array.from({length: 77}, (_, i) => i + 24),
-                    datasets: [
-                        { label: 'Full', data: [], borderColor: '#3b82f6', fill: false, pointRadius: 0, borderWidth: 2 },
-                        { label: 'Part', data: [], borderColor: '#f59e0b', fill: false, pointRadius: 0, borderWidth: 2 },
-                        { label: 'Neg', data: [], borderColor: '#f43f5e', fill: false, pointRadius: 0, borderWidth: 2 }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: { 
-                        y: { min: 0, max: 1, display: false },
-                        x: { display: true, ticks: { maxTicksLimit: 5 } }
-                    }
-                }
-            });
+        // recruits: use res{1,1} = C(:,j-1)
+        for (let j=2; j<=T+1; j++){
+          for (let m=0; m<len; m++){
+            const a = start0 + m;
+            const g2row = (T > 7) ? clamp((T-6-1) + m, 0, 27) : m;
+            const pop = (j-2 < C[0].length) ? C[a][j-2] : 0;
+            pop_matrix[i][j-1][a] = IMM_G2[g2row][i] * pop;
+          }
         }
+      }
+    }
 
-        function updateIndividualChart(mu1) {
-            const ages = Array.from({length: 77}, (_, i) => i + 24);
-            const profiles = getImmunityProfile(mu1, ages.map(a => a - 5));
-            
-            charts.ind.data.datasets[0].data = profiles.map(p => p[0]);
-            charts.ind.data.datasets[1].data = profiles.map(p => p[1]);
-            charts.ind.data.datasets[2].data = profiles.map(p => p[2]);
-            charts.ind.update();
-            document.getElementById('mu1Display').innerText = mu1;
-        }
+    // S3 fix
+    const S3 = [38,38,37,37,37,37,37];
+    if (T < 7){
+      const from = 36 + T;
+      for (let col=from; col<=42; col++){
+        const idx = col - from;
+        pop_matrix[0][0][col-1] = S3[idx];
+      }
+    }
+  }
 
-        async function runSensitivitySweep() {
-            const button = document.getElementById('runSweepBtn');
-            const originalText = button.innerHTML;
-            button.innerHTML = '⏳ 계산 중...';
-            button.disabled = true;
-            
-            const epsilon = parseFloat(document.getElementById('epsilonInput').value) || 0;
-            const vt = parseInt(document.getElementById('vtInput').value) || 0;
-            const muRange = Array.from({length: 23}, (_, i) => i + 1);
+  return pop_matrix;
+}
 
-            const results = { base: [], s1: [], s2: [] };
+/** =========================
+ * run_simulation (mu_1_sensitivity.m 동일)
+ * ========================= */
+function runSimulation(funcName, theta, t_span, v_t, epsilon){
+  const pop_matrix = (funcName === 'to_full')
+    ? matrixNoVacToFull(theta, t_span, v_t, epsilon)
+    : matrixNoVacToNeg(theta, t_span, v_t, epsilon);
 
-            muRange.forEach(mu1 => {
-                results.base.push(runSimulation(mu1, epsilon, vt, 'base'));
-                results.s1.push(runSimulation(mu1, epsilon, vt, 's1'));
-                results.s2.push(runSimulation(mu1, epsilon, vt, 's2'));
-            });
+  let p_full=0, p_part=0, p_neg=0;
+  // sum(sum(pop_matrix{i}))
+  for (let r=0; r<pop_matrix[0].length; r++){
+    for (let c=0; c<pop_matrix[0][r].length; c++){
+      p_full += pop_matrix[0][r][c];
+      p_part += pop_matrix[1][r][c];
+      p_neg  += pop_matrix[2][r][c];
+    }
+  }
+  return [p_full/N_TOT, p_part/N_TOT, p_neg/N_TOT];
+}
 
-            // Update Charts
-            const updateChart = (chart, data) => {
-                chart.data.datasets[0].data = data.map(d => d[0]);
-                chart.data.datasets[1].data = data.map(d => d[1]);
-                chart.data.datasets[2].data = data.map(d => d[2]);
-                chart.update();
-            };
+/** =========================
+ * Charts
+ * ========================= */
+let charts = { base:null, s1:null, s2:null, ind:null };
 
-            updateChart(charts.base, results.base);
-            updateChart(charts.s1, results.s1);
-            updateChart(charts.s2, results.s2);
+function makeScenarioChart(ctx){
+  return new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: MU_RANGE,
+      datasets: [
+        { label:'S_Full', data:[], borderColor:C_FULL, backgroundColor:C_FULL, pointStyle:'triangle', pointRadius:3, borderWidth:2, tension:0.1 },
+        { label:'S_Part', data:[], borderColor:C_PART, backgroundColor:C_PART, pointStyle:'rect', pointRadius:3, borderWidth:2, tension:0.1 },
+        { label:'S_Neg',  data:[], borderColor:C_NEG,  backgroundColor:C_NEG,  pointStyle:'circle', pointRadius:3, borderWidth:2, tension:0.1 },
+      ]
+    },
+    options: {
+      responsive:true,
+      maintainAspectRatio:false,
+      plugins:{ legend:{ display:false } },
+      scales:{
+        y:{ min:0, max:1, ticks:{ stepSize:0.2 }, grid:{ color:'#f1f5f9' } },
+        x:{ title:{ display:true, text:'μ1', font:{ size:10 } }, grid:{ display:false } }
+      }
+    }
+  });
+}
 
-            // Update Stats (for mu1=12 as a reference)
-            const idx = 11; // mu1 = 12
-            const bF = results.base[idx][0];
-            const s1F = results.s1[idx][0];
-            const s2F = results.s2[idx][0];
+function initCharts(){
+  charts.base = makeScenarioChart(document.getElementById('chartBase'));
+  charts.s1   = makeScenarioChart(document.getElementById('chartS1'));
+  charts.s2   = makeScenarioChart(document.getElementById('chartS2'));
 
-            document.getElementById('statBaseFull').innerText = (bF * 100).toFixed(1) + "%";
-            document.getElementById('statS1Gain').innerText = "+" + ((s1F - bF) * 100).toFixed(1) + "%";
-            document.getElementById('statS2Gain').innerText = "+" + ((s2F - bF) * 100).toFixed(1) + "%";
-            
-            button.innerHTML = '✓ 완료!';
-            setTimeout(() => {
-                button.innerHTML = originalText;
-                button.disabled = false;
-            }, 1000);
-        }
+  charts.ind = new Chart(document.getElementById('individualChart'), {
+    type:'line',
+    data:{
+      labels: Array.from({length: 51+20+T_SPAN+1}, (_,i)=>i), // tspan(0:..)
+      datasets:[
+        { label:'Full', data:[], borderColor:C_FULL, fill:false, pointRadius:0, borderWidth:2 },
+        { label:'Part', data:[], borderColor:C_PART, fill:false, pointRadius:0, borderWidth:2 },
+        { label:'Neg',  data:[], borderColor:C_NEG,  fill:false, pointRadius:0, borderWidth:2 },
+      ]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      plugins:{ legend:{ display:false } },
+      scales:{
+        y:{ min:0, max:1, display:false },
+        x:{ display:true, ticks:{ maxTicksLimit:6 } }
+      }
+    }
+  });
+}
 
-        // --- 4. Initialization ---
+function updateIndividualChart(mu1){
+  const theta = [1, mu1, 1, 0];
+  const tspan = Array.from({length: 51+20+T_SPAN+1}, (_,i)=>i);
+  const imm = EstImm(theta, tspan, 400);
 
-        document.addEventListener('DOMContentLoaded', () => {
-            initCharts();
-            updateIndividualChart(12);
-            runSensitivitySweep();
+  charts.ind.data.datasets[0].data = imm.Full;
+  charts.ind.data.datasets[1].data = imm.Part;
+  charts.ind.data.datasets[2].data = imm.Neg;
+  charts.ind.update();
 
-            document.getElementById('mu1Slider').addEventListener('input', (e) => {
-                updateIndividualChart(parseInt(e.target.value));
-            });
+  document.getElementById('mu1Display').innerText = mu1;
+}
 
-            document.getElementById('runSweepBtn').addEventListener('click', runSensitivitySweep);
-        });
+function setStatus(msg){ document.getElementById('status').innerText = msg; }
 
-    </script>
+/** =========================
+ * Run sweep (epsilon only)
+ * ========================= */
+async function runSweep(){
+  const btn = document.getElementById('runBtn');
+  const eps = parseFloat(document.getElementById('epsilonInput').value);
+  if (!Number.isFinite(eps) || eps < 0){
+    setStatus('epsilon 값이 올바르지 않습니다.');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '⏳ 계산 중...';
+  setStatus(`Running... (ε=${eps})`);
+
+  const results_base = [];
+  const results_s1 = [];
+  const results_s2 = [];
+
+  for (let i=0; i<MU_RANGE.length; i++){
+    const mu1 = MU_RANGE[i];
+    const theta = [1, mu1, 1, 0];
+
+    // MATLAB: Baseline v_t=50, to_full
+    results_base.push(runSimulation('to_full', theta, T_SPAN, 50, eps));
+
+    // MATLAB: S#1 v_t=0, to_neg
+    results_s1.push(runSimulation('to_neg', theta, T_SPAN, 0, eps));
+
+    // MATLAB: S#2 v_t=0, to_full
+    results_s2.push(runSimulation('to_full', theta, T_SPAN, 0, eps));
+
+    // yield to UI
+    if (i % 2 === 0) await new Promise(r=>setTimeout(r,0));
+  }
+
+  // update charts (order: [full, part, neg])
+  function apply(chart, arr){
+    chart.data.datasets[0].data = arr.map(x=>x[0]);
+    chart.data.datasets[1].data = arr.map(x=>x[1]);
+    chart.data.datasets[2].data = arr.map(x=>x[2]);
+    chart.update();
+  }
+
+  apply(charts.base, results_base);
+  apply(charts.s1, results_s1);
+  apply(charts.s2, results_s2);
+
+  // stats at mu1=12 (index 11)
+  const idx = 11;
+  const bF = results_base[idx][0];
+  const s1F = results_s1[idx][0];
+  const s2F = results_s2[idx][0];
+
+  document.getElementById('statBaseFull').innerText = (bF*100).toFixed(1) + '%';
+  document.getElementById('statS1Gain').innerText = '+' + ((s1F-bF)*100).toFixed(1) + '%';
+  document.getElementById('statS2Gain').innerText = '+' + ((s2F-bF)*100).toFixed(1) + '%';
+
+  btn.innerHTML = '✓ 완료!';
+  setStatus(`Done. (ε=${eps})`);
+  setTimeout(()=>{
+    btn.innerHTML = '🔄 실행 (μ1=1..23 Sweep)';
+    btn.disabled = false;
+  }, 800);
+}
+
+/** =========================
+ * Init
+ * ========================= */
+document.addEventListener('DOMContentLoaded', ()=>{
+  initCharts();
+  updateIndividualChart(12);
+
+  document.getElementById('mu1Slider').addEventListener('input', (e)=>{
+    updateIndividualChart(parseInt(e.target.value, 10));
+  });
+
+  document.getElementById('runBtn').addEventListener('click', runSweep);
+
+  // initial run like your old page did
+  runSweep();
+});
+</script>
+
 </body>
 </html>
