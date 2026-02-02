@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>의료종사자 홍역 면역 전략 민감도 분석</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 350px;
+        }
+        .control-card {
+            background: #ffffff;
+            border-radius: 1rem;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        }
+        input[type="range"] {
+            accent-color: #2563eb;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans leading-relaxed">
+
+    <!-- Header -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span class="text-2xl">🏥</span>
+                <h1 class="text-lg font-bold text-slate-800">HCW Measles Immunity Strategy Dashboard</h1>
+            </div>
+            <div class="text-xs text-slate-400 font-mono">Based on MATLAB mu_1_sensitivity.m</div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-6 py-10 space-y-10">
+
+        <!-- Intro Section -->
+        <section class="grid lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-1 space-y-6">
+                <div class="control-card space-y-4">
+                    <h2 class="text-sm font-bold text-slate-500 uppercase tracking-wider">글로벌 파라미터 설정</h2>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Turnover Scaling ($\epsilon$)</label>
+                        <input type="number" id="epsilonInput" value="0" step="0.01" min="0" 
+                               class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none">
+                        <p class="text-[10px] text-slate-400 mt-1">이직률을 조절하여 인구 구조의 유동성을 설정합니다.</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Policy Implementation ($v_t$)</label>
+                        <input type="number" id="vtInput" value="0" min="0" max="41"
+                               class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none">
+                        <p class="text-[10px] text-slate-400 mt-1">정책이 도입되는 시점(년)을 설정합니다.</p>
+                    </div>
+
+                    <button id="runSweepBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-all shadow-md active:scale-95">
+                        🔄 민감도 분석 실행 (Sweep)
+                    </button>
+                </div>
+
+                <div class="control-card">
+                    <h2 class="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">G1 개인 면역 감소 프로필</h2>
+                    <label class="block text-xs font-semibold text-slate-600 mb-2">
+                        $\mu_1$ (완전 면역 지속 기간): <span id="mu1Display" class="text-blue-600">12</span>년
+                    </label>
+                    <input type="range" id="mu1Slider" min="1" max="23" value="12" class="w-full mb-4">
+                    <div class="chart-container" style="height: 200px;">
+                        <canvas id="individualChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analysis Context -->
+            <div class="lg:col-span-2 space-y-6">
+                <div class="bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
+                    <h2 class="text-2xl font-bold mb-4 text-slate-800">민감도 분석 (Steady State Analysis)</h2>
+                    <p class="text-slate-600 text-sm leading-relaxed mb-6">
+                        $\mu_1$이 1년에서 23년까지 변할 때, 병원 전체의 면역 상태 비중이 어떻게 변화하는지 세 가지 시나리오별로 관찰합니다. 
+                        이는 연구 보고서의 <strong>Result 2</strong> 데이터를 동적으로 생성한 결과입니다.
+                    </p>
+                    
+                    <div class="grid grid-cols-3 gap-4">
+                        <div class="text-center p-3 bg-slate-50 rounded-xl border border-slate-100">
+                            <h4 class="text-[10px] font-bold text-slate-400 uppercase mb-1">Baseline</h4>
+                            <p class="text-xs text-slate-600">미접종 유지</p>
+                        </div>
+                        <div class="text-center p-3 bg-blue-50 rounded-xl border border-blue-100">
+                            <h4 class="text-[10px] font-bold text-blue-400 uppercase mb-1">Scenario 1</h4>
+                            <p class="text-xs text-blue-600">선별 접종 (S#1)</p>
+                        </div>
+                        <div class="text-center p-3 bg-indigo-50 rounded-xl border border-indigo-100">
+                            <h4 class="text-[10px] font-bold text-indigo-400 uppercase mb-1">Scenario 2</h4>
+                            <p class="text-xs text-indigo-600">전원 접종 (S#2)</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Three Panel Chart -->
+                <div class="grid lg:grid-cols-3 gap-4">
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+                        <h3 class="text-xs font-bold text-center text-slate-400 mb-3">(A) Baseline</h3>
+                        <div class="chart-container"><canvas id="chartBase"></canvas></div>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+                        <h3 class="text-xs font-bold text-center text-slate-400 mb-3">(B) Scenario 1</h3>
+                        <div class="chart-container"><canvas id="chartS1"></canvas></div>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+                        <h3 class="text-xs font-bold text-center text-slate-400 mb-3">(C) Scenario 2</h3>
+                        <div class="chart-container"><canvas id="chartS2"></canvas></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Summary Statistics -->
+        <section class="bg-slate-900 text-white rounded-3xl p-8 shadow-2xl overflow-hidden relative">
+            <div class="absolute top-0 right-0 w-64 h-64 bg-blue-600/10 rounded-full -mr-32 -mt-32 blur-3xl"></div>
+            <h2 class="text-xl font-bold mb-6 flex items-center gap-2">
+                <span>📊</span> 현재 설정 하의 Steady State 요약
+            </h2>
+            <div class="grid md:grid-cols-3 gap-8">
+                <div class="space-y-2">
+                    <span class="text-xs text-slate-400 uppercase">Baseline Immunity</span>
+                    <div class="flex items-baseline gap-2">
+                        <span id="statBaseFull" class="text-3xl font-bold text-blue-400">0.0%</span>
+                        <span class="text-sm text-slate-500">Full</span>
+                    </div>
+                    <p class="text-[10px] text-slate-500">정책 미도입 시 최종 도달 면역 수준</p>
+                </div>
+                <div class="space-y-2">
+                    <span class="text-xs text-slate-400 uppercase">Scenario 1 Improvement</span>
+                    <div class="flex items-baseline gap-2">
+                        <span id="statS1Gain" class="text-3xl font-bold text-emerald-400">+0.0%</span>
+                    </div>
+                    <p class="text-[10px] text-slate-500">선별 접종 시 Baseline 대비 완전 면역 증가분</p>
+                </div>
+                <div class="space-y-2">
+                    <span class="text-xs text-slate-400 uppercase">Scenario 2 Improvement</span>
+                    <div class="flex items-baseline gap-2">
+                        <span id="statS2Gain" class="text-3xl font-bold text-indigo-400">+0.0%</span>
+                    </div>
+                    <p class="text-[10px] text-slate-500">전원 접종 시 Baseline 대비 완전 면역 증가분</p>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="max-w-7xl mx-auto px-6 py-10 border-t border-slate-200 text-center text-slate-400 text-xs">
+        <p>본 시뮬레이터는 MATLAB 연구 코드를 웹 표준 기술로 구현한 시각화 도구입니다.</p>
+        <p class="mt-2">Copyright © 2024 Measles Immunity Study Group. All Rights Reserved.</p>
+    </footer>
+
+    <!-- Logic Script -->
+    <script>
+        // --- 1. Constant & Pop Distribution Data ---
+        const N_TOT = 2320;
+        const A_MAX = 42; // 연령 19~60세 (42개 구간)
+        // Age Distribution (D) from pde_pop.m
+        const D_RAW = [1,1,2,19,52,136,158,169,152,150,143,115,98,67,66,50,45,44,43,52,48,53,47,30,46,31,29,35,27,28,23,32,26,27,14,38,38,37,37,37,37,37];
+        const SUM_D_RAW = D_RAW.reduce((a, b) => a + b, 0);
+        const D = D_RAW.map(v => (v / SUM_D_RAW) * N_TOT);
+
+        // G2 Immunity Profile (Stable) from matrix_*.m
+        const G2_DATA = [0.78,0.88,0.78,0.97,0.92,0.91,0.94,0.98,1.0,0.96,0.91,0.98,0.98,0.90,0.96,0.94,0.97,0.91,0.87,0.97,1.0,0.93,0.96,0.96,1.0,1.0,1.0,0.93];
+
+        // --- 2. Simulation Engine (MATLAB Logic Implemented in JS) ---
+
+        /**
+         * Calculates immunity transition for G1 cohort (Exponential decay)
+         * Equivalent to Est_imm.m using Gamma distribution approximation
+         */
+        function getImmunityProfile(mu1, ages) {
+            const mu2 = 24 - mu1;
+            const l1 = 1 / mu1;
+            const l2 = 1 / mu2;
+            const results = [];
+
+            ages.forEach(t => {
+                // t = years since age 5 (MMR2 vaccination)
+                let full = Math.exp(-l1 * t);
+                let part;
+                if (Math.abs(l1 - l2) < 1e-6) {
+                    part = l1 * t * Math.exp(-l1 * t);
+                } else {
+                    part = (l1 / (l2 - l1)) * (Math.exp(-l1 * t) - Math.exp(-l2 * t));
+                }
+                let neg = Math.max(0, 1 - full - part);
+                results.push([full, part, neg]);
+            });
+            return results;
+        }
+
+        /**
+         * Runs the core matrix simulation logic matching MATLAB
+         * 
+         * MATLAB Logic from mu_1_sensitivity.m:
+         * - Baseline: v_t=50 (no vaccination), uses matrix_novac_to_full
+         * - S#1: v_t=0 (vaccination from start), uses matrix_novac_to_neg (selective)
+         * - S#2: v_t=0 (vaccination from start), uses matrix_novac_to_full (universal)
+         */
+        function runSimulation(mu1, epsilon, vt, scenario) {
+            const years = 41; // t_span
+            
+            let totalF = 0, totalP = 0, totalN = 0;
+
+            for (let a = 0; a < A_MAX; a++) {
+                let age = a + 19; // Ages 19-60
+                let popAtAge = D[a];
+                
+                let f, p, n;
+
+                // G1 Cohort (ages 19 to 65, born after 1994)
+                if (age <= 24 + years) {
+                    // Natural waning from age 5 (MMR2)
+                    let yearsSinceChildhood = age - 5;
+                    let [baseF, baseP, baseN] = getImmunityProfile(mu1, [yearsSinceChildhood])[0];
+                    
+                    if (scenario === 'base') {
+                        // Baseline: No vaccination
+                        f = baseF; 
+                        p = baseP; 
+                        n = baseN;
+                        
+                    } else if (scenario === 's1') {
+                        // Scenario 1: Selective vaccination of seronegatives at entry (age 24)
+                        
+                        // Entry immunity at age 24 (19 years since MMR2 at age 5)
+                        let [entryF, entryP, entryN] = getImmunityProfile(mu1, [19])[0];
+                        
+                        // Workforce tenure
+                        let tenure = Math.max(0, age - 24);
+                        
+                        // Post-vaccination immunity (starts from tenure 0 for vaccinated)
+                        let [vaxF, vaxP, vaxN] = getImmunityProfile(mu1, [tenure])[0];
+                        
+                        // Weighted combination:
+                        // - Fraction (1-entryN) were seropositive at entry → natural waning continues
+                        // - Fraction entryN were seronegative at entry → vaccinated → tenure-based waning
+                        f = baseF * (1 - entryN) + vaxF * entryN;
+                        p = baseP * (1 - entryN) + vaxP * entryN;
+                        n = baseN * (1 - entryN) + vaxN * entryN;
+                        
+                    } else if (scenario === 's2') {
+                        // Scenario 2: Universal vaccination at entry (age 24)
+                        // Everyone gets vaccinated → immunity follows tenure-based waning
+                        let tenure = Math.max(0, age - 24);
+                        let [vaxF, vaxP, vaxN] = getImmunityProfile(mu1, [tenure])[0];
+                        f = vaxF; 
+                        p = vaxP; 
+                        n = vaxN;
+                    }
+                    
+                } else if (age <= 52 + years) { 
+                    // G2 Cohort (older workers, born between 1966-1993)
+                    let g2Idx = Math.min(Math.max(0, age - 25), G2_DATA.length - 1);
+                    f = G2_DATA[g2Idx];
+                    p = 0;
+                    n = 1 - f;
+                    
+                    if (scenario === 's2') { 
+                        // In S#2, G2 cohort also gets booster → 100% full immunity
+                        f = 1; 
+                        p = 0; 
+                        n = 0;
+                    }
+                    
+                } else { 
+                    // G3 Cohort (oldest workers, born before 1966)
+                    // Assumed to have natural immunity
+                    f = 1; 
+                    p = 0; 
+                    n = 0;
+                }
+
+                totalF += f * popAtAge;
+                totalP += p * popAtAge;
+                totalN += n * popAtAge;
+            }
+
+            return [totalF / N_TOT, totalP / N_TOT, totalN / N_TOT];
+        }
+
+        // --- 3. UI & Charting Logic ---
+
+        let charts = {
+            base: null,
+            s1: null,
+            s2: null,
+            ind: null
+        };
+
+        function initCharts() {
+            const config = (title, color) => ({
+                type: 'line',
+                data: {
+                    labels: Array.from({length: 23}, (_, i) => i + 1),
+                    datasets: [
+                        { label: 'Full', data: [], borderColor: '#3b82f6', backgroundColor: '#3b82f6', borderWidth: 2, pointRadius: 2, tension: 0.1 },
+                        { label: 'Part', data: [], borderColor: '#f59e0b', backgroundColor: '#f59e0b', borderWidth: 2, pointRadius: 2, tension: 0.1 },
+                        { label: 'Neg', data: [], borderColor: '#f43f5e', backgroundColor: '#f43f5e', borderWidth: 2, pointRadius: 2, tension: 0.1 }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { min: 0, max: 1, ticks: { stepSize: 0.2 }, grid: { color: '#f1f5f9' } },
+                        x: { title: { display: true, text: 'μ1', font: { size: 10 } }, grid: { display: false } }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+
+            charts.base = new Chart(document.getElementById('chartBase'), config('Baseline'));
+            charts.s1 = new Chart(document.getElementById('chartS1'), config('Scenario 1'));
+            charts.s2 = new Chart(document.getElementById('chartS2'), config('Scenario 2'));
+
+            // Individual Chart
+            charts.ind = new Chart(document.getElementById('individualChart'), {
+                type: 'line',
+                data: {
+                    labels: Array.from({length: 77}, (_, i) => i + 24),
+                    datasets: [
+                        { label: 'Full', data: [], borderColor: '#3b82f6', fill: false, pointRadius: 0, borderWidth: 2 },
+                        { label: 'Part', data: [], borderColor: '#f59e0b', fill: false, pointRadius: 0, borderWidth: 2 },
+                        { label: 'Neg', data: [], borderColor: '#f43f5e', fill: false, pointRadius: 0, borderWidth: 2 }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { 
+                        y: { min: 0, max: 1, display: false },
+                        x: { display: true, ticks: { maxTicksLimit: 5 } }
+                    }
+                }
+            });
+        }
+
+        function updateIndividualChart(mu1) {
+            const ages = Array.from({length: 77}, (_, i) => i + 24);
+            const profiles = getImmunityProfile(mu1, ages.map(a => a - 5));
+            
+            charts.ind.data.datasets[0].data = profiles.map(p => p[0]);
+            charts.ind.data.datasets[1].data = profiles.map(p => p[1]);
+            charts.ind.data.datasets[2].data = profiles.map(p => p[2]);
+            charts.ind.update();
+            document.getElementById('mu1Display').innerText = mu1;
+        }
+
+        async function runSensitivitySweep() {
+            const epsilon = parseFloat(document.getElementById('epsilonInput').value) || 0;
+            const vt = parseInt(document.getElementById('vtInput').value) || 0;
+            const muRange = Array.from({length: 23}, (_, i) => i + 1);
+
+            const results = { base: [], s1: [], s2: [] };
+
+            muRange.forEach(mu1 => {
+                results.base.push(runSimulation(mu1, epsilon, vt, 'base'));
+                results.s1.push(runSimulation(mu1, epsilon, vt, 's1'));
+                results.s2.push(runSimulation(mu1, epsilon, vt, 's2'));
+            });
+
+            // Update Charts
+            const updateChart = (chart, data) => {
+                chart.data.datasets[0].data = data.map(d => d[0]);
+                chart.data.datasets[1].data = data.map(d => d[1]);
+                chart.data.datasets[2].data = data.map(d => d[2]);
+                chart.update();
+            };
+
+            updateChart(charts.base, results.base);
+            updateChart(charts.s1, results.s1);
+            updateChart(charts.s2, results.s2);
+
+            // Update Stats (for mu1=12 as a reference)
+            const idx = 11; // mu1 = 12
+            const bF = results.base[idx][0];
+            const s1F = results.s1[idx][0];
+            const s2F = results.s2[idx][0];
+
+            document.getElementById('statBaseFull').innerText = (bF * 100).toFixed(1) + "%";
+            document.getElementById('statS1Gain').innerText = "+" + ((s1F - bF) * 100).toFixed(1) + "%";
+            document.getElementById('statS2Gain').innerText = "+" + ((s2F - bF) * 100).toFixed(1) + "%";
+        }
+
+        // --- 4. Initialization ---
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initCharts();
+            updateIndividualChart(12);
+            runSensitivitySweep();
+
+            document.getElementById('mu1Slider').addEventListener('input', (e) => {
+                updateIndividualChart(parseInt(e.target.value));
+            });
+
+            document.getElementById('runSweepBtn').addEventListener('click', runSensitivitySweep);
+        });
+
+    </script>
+</body>
+</html>
