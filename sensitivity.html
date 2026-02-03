@@ -3,18 +3,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>의료종사자 홍역 면역 전략 민감도 분석 (epsilon only)</title>
+  <title>의료종사자 홍역 면역 전략 민감도 분석 (Ternary Dots)</title>
 
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-  <!-- jStat: gamma pdf/cdf -->
   <script src="https://cdn.jsdelivr.net/npm/jstat@1.9.6/dist/jstat.min.js"></script>
 
   <style>
     .chart-container { position: relative; width: 100%; height: 350px; }
+    /* 컨테이너 너비를 늘리고 불필요한 aspect-ratio 제거 */
+    .ternary-container {
+      position: relative;
+      width: 100%;
+      max-width: 800px;
+      margin: 0 auto;
+      min-height: 400px; /* 로딩 전 최소 높이 확보 */
+    }
     .control-card { background: #ffffff; border-radius: 1rem; padding: 1.5rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
-    input[type="range"] { accent-color: #2563eb; }
+    input[type="number"] { accent-color: #2563eb; }
   </style>
 </head>
 
@@ -33,12 +39,9 @@
 <main class="max-w-7xl mx-auto px-6 py-10 space-y-10">
 
   <section class="grid lg:grid-cols-3 gap-8">
-    <!-- Controls -->
     <div class="lg:col-span-1 space-y-6">
-
       <div class="control-card space-y-4">
         <h2 class="text-sm font-bold text-slate-500 uppercase tracking-wider">입력 (epsilon only)</h2>
-
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1">Turnover Scaling (ε)</label>
           <input type="number" id="epsilonInput" value="0" step="0.01" min="0"
@@ -51,101 +54,44 @@
           🔄 실행 (μ1=1..23 Sweep)
         </button>
 
-        <div class="text-[11px] text-slate-500">
-          <div class="font-mono">t_span = 41 (고정)</div>
-          <div class="font-mono">Baseline: matrix_novac_to_full, v_t=50</div>
-          <div class="font-mono">S#1: matrix_novac_to_neg, v_t=0</div>
-          <div class="font-mono">S#2: matrix_novac_to_full, v_t=0</div>
+        <div class="text-[11px] text-slate-500 space-y-1">
+          <div class="font-mono">t_span = 41 (Fixed)</div>
+          <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-black"></span> Baseline: to_full, v_t=50</div>
+          <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-[#C46E41]"></span> Scenario 1: to_neg, v_t=0</div>
+          <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-[#EDAF21]"></span> Scenario 2: to_full, v_t=0</div>
         </div>
-
         <div id="status" class="text-[11px] text-slate-500"></div>
-      </div>
-
-      <!-- Individual Profile (optional display only) -->
-      <div class="control-card">
-        <h2 class="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">G1 개인 면역 감소 프로필 (Est_imm)</h2>
-        <label class="block text-xs font-semibold text-slate-600 mb-2">
-          μ1: <span id="mu1Display" class="text-blue-600">12</span>
-        </label>
-        <input type="range" id="mu1Slider" min="1" max="23" value="12" class="w-full mb-4">
-        <div class="chart-container" style="height: 200px;">
-          <canvas id="individualChart"></canvas>
-        </div>
-        <p class="text-[10px] text-slate-400 mt-2">
-          이 차트는 sweep 결과에 영향을 주지 않고, Est_imm 형태를 “참고용”으로만 표시합니다.
-        </p>
       </div>
     </div>
 
-    <!-- Context + 3 charts -->
     <div class="lg:col-span-2 space-y-6">
       <div class="bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
         <h2 class="text-2xl font-bold mb-4 text-slate-800">Result 2 (mu_1_sensitivity.m) – epsilon 입력 버전</h2>
-        <p class="text-slate-600 text-sm leading-relaxed mb-6">
-          MATLAB 코드와 동일하게, μ1(1~23)을 sweep하며 각 시나리오에서 최종 시점(t_span=41)의
-          <strong>S_Full / S_Part / S_Neg</strong> 비율을 계산합니다.
-          입력은 ε 하나이며, v_t는 시나리오별로 하드코딩되어 있습니다.
-        </p>
+        
+        <div class="ternary-container mb-10">
+          <!-- Canvas에 w-full 클래스 추가 -->
+          <canvas id="ternaryChart" class="w-full"></canvas>
+        </div>
 
-        <div class="grid grid-cols-3 gap-4">
-          <div class="text-center p-3 bg-slate-50 rounded-xl border border-slate-100">
-            <h4 class="text-[10px] font-bold text-slate-400 uppercase mb-1">Baseline</h4>
-            <p class="text-xs text-slate-600">to_full, v_t=50</p>
-          </div>
-          <div class="text-center p-3 bg-blue-50 rounded-xl border border-blue-100">
-            <h4 class="text-[10px] font-bold text-blue-400 uppercase mb-1">Scenario 1</h4>
-            <p class="text-xs text-blue-600">to_neg, v_t=0</p>
-          </div>
-          <div class="text-center p-3 bg-indigo-50 rounded-xl border border-indigo-100">
-            <h4 class="text-[10px] font-bold text-indigo-400 uppercase mb-1">Scenario 2</h4>
-            <p class="text-xs text-indigo-600">to_full, v_t=0</p>
-          </div>
-        </div>
-      </div>
+        <hr class="my-8 border-slate-100">
 
-      <div class="grid lg:grid-cols-3 gap-4">
-        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
-          <h3 class="text-xs font-bold text-center text-slate-400 mb-3">(A) Baseline</h3>
-          <div class="chart-container"><canvas id="chartBase"></canvas></div>
-        </div>
-        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
-          <h3 class="text-xs font-bold text-center text-slate-400 mb-3">(B) Scenario 1</h3>
-          <div class="chart-container"><canvas id="chartS1"></canvas></div>
-        </div>
-        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
-          <h3 class="text-xs font-bold text-center text-slate-400 mb-3">(C) Scenario 2</h3>
-          <div class="chart-container"><canvas id="chartS2"></canvas></div>
+        <div class="grid lg:grid-cols-3 gap-4">
+          <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-50">
+            <h3 class="text-xs font-bold text-center text-slate-400 mb-3">(A) Baseline</h3>
+            <div class="chart-container"><canvas id="chartBase"></canvas></div>
+          </div>
+          <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-50">
+            <h3 class="text-xs font-bold text-center text-slate-400 mb-3">(B) Scenario 1</h3>
+            <div class="chart-container"><canvas id="chartS1"></canvas></div>
+          </div>
+          <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-50">
+            <h3 class="text-xs font-bold text-center text-slate-400 mb-3">(C) Scenario 2</h3>
+            <div class="chart-container"><canvas id="chartS2"></canvas></div>
+          </div>
         </div>
       </div>
     </div>
   </section>
-
-  <section class="bg-slate-900 text-white rounded-3xl p-8 shadow-2xl overflow-hidden relative">
-    <div class="absolute top-0 right-0 w-64 h-64 bg-blue-600/10 rounded-full -mr-32 -mt-32 blur-3xl"></div>
-    <h2 class="text-xl font-bold mb-6 flex items-center gap-2"><span>📊</span> 현재 ε에서 요약 (μ1=12 기준)</h2>
-    <div class="grid md:grid-cols-3 gap-8">
-      <div class="space-y-2">
-        <span class="text-xs text-slate-400 uppercase">Baseline Full</span>
-        <div class="flex items-baseline gap-2">
-          <span id="statBaseFull" class="text-3xl font-bold text-blue-400">0.0%</span>
-          <span class="text-sm text-slate-500">Full</span>
-        </div>
-      </div>
-      <div class="space-y-2">
-        <span class="text-xs text-slate-400 uppercase">Scenario 1 Gain</span>
-        <div class="flex items-baseline gap-2">
-          <span id="statS1Gain" class="text-3xl font-bold text-emerald-400">+0.0%</span>
-        </div>
-      </div>
-      <div class="space-y-2">
-        <span class="text-xs text-slate-400 uppercase">Scenario 2 Gain</span>
-        <div class="flex items-baseline gap-2">
-          <span id="statS2Gain" class="text-3xl font-bold text-indigo-400">+0.0%</span>
-        </div>
-      </div>
-    </div>
-  </section>
-
 </main>
 
 <footer class="max-w-7xl mx-auto px-6 py-10 border-t border-slate-200 text-center text-slate-400 text-xs">
@@ -154,26 +100,30 @@
 
 <script>
 /** =========================
- * MATLAB constants
+ * Constants & MATLAB Logic
  * ========================= */
 const N_TOT = 2320;
-const T_SPAN = 41;   // mu_1_sensitivity.m
+const T_SPAN = 41;
 const MU_RANGE = Array.from({length: 23}, (_, i) => i + 1);
 
-// colors (MATLAB)
-const C_FULL = 'rgb(0,77,189)';     // ~ [0.00, 0.3, 0.74]
-const C_PART = 'rgb(237,176,33)';   // ~ [0.93, 0.69, 0.13]
-const C_NEG  = 'rgb(230,26,26)';    // ~ [0.9, 0.1, 0.10]
+const C_FULL = 'rgb(0,77,189)';
+const C_PART = 'rgb(237,176,33)';
+const C_NEG  = 'rgb(230,26,26)';
 
-/** =========================
- * Numeric utilities
- * ========================= */
-function clamp(x, lo, hi){ return Math.max(lo, Math.min(hi, x)); }
+const COLOR_S1 = 'rgb(196, 110, 65)'; // MATLAB color_S1
+const COLOR_S2 = 'rgb(237, 175, 33)'; // MATLAB color_S2
 
-// Simpson integral on [0,t]
+// 레이아웃 상수 정의
+const LAYOUT = {
+    marginLeft: 60,  // 왼쪽 라벨 공간 (S_Neg)
+    marginRight: 60, // 오른쪽 라벨 공간 (S_Part)
+    marginTop: 40,   // 위쪽 라벨 공간 (S_Full)
+    marginBottom: 40 // 아래쪽 여백
+};
+
 function simpsonIntegrate(f, t, n){
   if (t <= 0) return 0;
-  n = Math.max(200, Math.floor(n||400)); // reasonable default
+  n = Math.max(200, Math.floor(n||400));
   if (n % 2 === 1) n += 1;
   const h = t / n;
   let s = f(0) + f(t);
@@ -187,629 +137,482 @@ function simpsonIntegrate(f, t, n){
 function gampdf(x, a, b){ if (x < 0) return 0; return jStat.gamma.pdf(x, a, b); }
 function gamcdf(x, a, b){ if (x < 0) return 0; return jStat.gamma.cdf(x, a, b); }
 
-/** =========================
- * Est_imm(param, tspan)  (MATLAB 동일)
- * param = [alpha1, mu1, alpha2, dummy]
- * beta1 = mu1/alpha1, beta2 = (24-mu1)/alpha2
- * P(t)=1-gamcdf(t,a1,b1)
- * Neg(t)=∫ gampdf(u,a1,b1)*gamcdf(t-u,a2,b2)du + eps
- * Part=1-P-Neg
- * ========================= */
 function EstImm(param, tspan, intSteps){
   const P0 = 1.0;
-  const alpha1 = param[0];
-  const mu1 = param[1];
-  const alpha2 = param[2];
-
-  const beta1 = mu1 / alpha1;
-  const beta2 = (24 - mu1) / alpha2;
-
-  const P = new Array(tspan.length);
-  const Part = new Array(tspan.length);
-  const Neg = new Array(tspan.length);
-
+  const alpha1 = param[0], mu1 = param[1], alpha2 = param[2];
+  const beta1 = mu1 / alpha1, beta2 = (24 - mu1) / alpha2;
+  const P = [], Part = [], Neg = [];
   for (let i=0; i<tspan.length; i++){
     const t = tspan[i];
     const F1 = gamcdf(t, alpha1, beta1);
     const P_t = P0 * (1 - F1);
-
     if (t === 0){
-      P[i] = P_t;
-      Part[i] = Number.EPSILON;
-      Neg[i] = Number.EPSILON;
+      P[i] = P_t; Part[i] = Number.EPSILON; Neg[i] = Number.EPSILON;
     } else {
       const integrand = (u) => gampdf(u, alpha1, beta1) * gamcdf(t-u, alpha2, beta2);
       const neg = P0 * simpsonIntegrate(integrand, t, intSteps) + Number.EPSILON;
-      const part = 1 - P_t - neg;
-
-      P[i] = P_t;
-      Neg[i] = neg;
-      Part[i] = part;
+      P[i] = P_t; Neg[i] = neg; Part[i] = 1 - P_t - neg;
     }
   }
-  // return IMM_G1: [Full, Part, Neg]
   return { Full: P, Part, Neg };
 }
 
-/** =========================
- * pde_pop(year, epsilon)  (MATLAB 동일)
- * returns {C, P}
- * C: 42 x year
- * P: 42 x (year+1)
- * ========================= */
 function pdePop(year, epsilon){
-  const Amax = 42;
-  const L = Amax;
-  const Ntot = 2320;
-
-  const y = [1,1,2,19,52,136,158,169,152,150,143,115,98,67,66,50,45,44,43,52,48,53,47,30,46,31,29,35,27,28,23,32,26,27,14,38,38,37,37,37,37,37].map(v => v/2320);
-  let D = y.slice(0, 42);
+  const Amax = 42, L = Amax, Ntot = 2320;
+  const y_raw = [1,1,2,19,52,136,158,169,152,150,143,115,98,67,66,50,45,44,43,52,48,53,47,30,46,31,29,35,27,28,23,32,26,27,14,38,38,37,37,37,37,37];
+  let D = y_raw.map(v => v/2320);
   const sumD = D.reduce((a,b)=>a+b,0);
   D = D.map(v => v/sumD * Ntot);
-
-  const Tmax = year;
-
   const out_amt = new Array(L).fill(0);
-  for (let a=0; a<L-1; a++){
-    out_amt[a] = Math.max(D[a]-D[a+1], 0) + D[a]*epsilon;
-  }
+  for (let a=0; a<L-1; a++) out_amt[a] = Math.max(D[a]-D[a+1], 0) + D[a]*epsilon;
   out_amt[L-1] = D[L-1] + D[L-1]*epsilon;
-
   const inflow_weight = new Array(L).fill(0);
   inflow_weight[0] = D[0] + D[0]*epsilon;
-  for (let a=1; a<L; a++){
-    inflow_weight[a] = Math.max(D[a]-D[a-1], 0) + D[a]*epsilon;
-  }
+  for (let a=1; a<L; a++) inflow_weight[a] = Math.max(D[a]-D[a-1], 0) + D[a]*epsilon;
   let sumW = inflow_weight.reduce((a,b)=>a+b,0);
-  if (sumW > 0){
-    for (let a=0; a<L; a++) inflow_weight[a] /= sumW;
-  } else {
-    for (let a=0; a<L; a++) inflow_weight[a] = 1/L;
-  }
-
-  // P: L x (Tmax+1)
-  const P = Array.from({length:L}, ()=> new Array(Tmax+1).fill(0));
+  for (let a=0; a<L; a++) inflow_weight[a] /= sumW;
+  const P = Array.from({length:L}, ()=> new Array(year+1).fill(0));
   for (let a=0; a<L; a++) P[a][0] = D[a];
-
-  // C: L x Tmax
-  let C = Array.from({length:L}, ()=> new Array(Tmax).fill(0));
-
-  for (let t=1; t<=Tmax; t++){
-    let TotalStock, ExistingC;
-    if (t === 1){
-      ExistingC = []; // none
-      TotalStock = new Array(L);
-      for (let a=0; a<L; a++) TotalStock[a] = P[a][t-1];
-    } else {
-      // ExistingC = C(:,1:t-1)
-      TotalStock = new Array(L).fill(0);
-      for (let a=0; a<L; a++){
-        let s = P[a][t-1];
-        for (let k=0; k<t-1; k++) s += C[a][k];
-        TotalStock[a] = s;
-      }
-    }
+  let C = Array.from({length:L}, ()=> new Array(year).fill(0));
+  for (let t=1; t<=year; t++){
+    let TotalStock = new Array(L).fill(0);
     for (let a=0; a<L; a++){
-      if (TotalStock[a] <= 0) TotalStock[a] = 1e-9;
+      let s = P[a][t-1];
+      for (let k=0; k<t-1; k++) s += C[a][k];
+      TotalStock[a] = Math.max(s, 1e-9);
     }
-
     const take = new Array(L);
-    for (let a=0; a<L; a++){
-      take[a] = Math.min(out_amt[a], Math.max(TotalStock[a], 0));
-    }
-
-    // out_P and P_after
-    const out_P = new Array(L);
-    const P_after = new Array(L);
+    for (let a=0; a<L; a++) take[a] = Math.min(out_amt[a], TotalStock[a]);
+    const out_P = new Array(L), P_after = new Array(L);
     for (let a=0; a<L; a++){
       out_P[a] = (P[a][t-1] / TotalStock[a]) * take[a];
       P_after[a] = Math.max(P[a][t-1] - out_P[a], 0);
     }
-
-    // C_after
     let C_after = Array.from({length:L}, ()=> new Array(t-1).fill(0));
     let out_C_all_sum = 0;
     if (t > 1){
       for (let k=0; k<t-1; k++){
         for (let a=0; a<L; a++){
           const out_C_k = (C[a][k] / TotalStock[a]) * take[a];
-          const after = Math.max(C[a][k] - out_C_k, 0);
-          C_after[a][k] = after;
+          C_after[a][k] = Math.max(C[a][k] - out_C_k, 0);
           out_C_all_sum += out_C_k;
         }
       }
     }
-
-    // aging P
     const P_next = new Array(L).fill(0);
-    for (let a=1; a<L; a++){
-      P_next[a] = P_after[a-1];
-    }
-
-    // aging C into C_next
-    const C_next = Array.from({length:L}, ()=> new Array(Tmax).fill(0));
+    for (let a=1; a<L; a++) P_next[a] = P_after[a-1];
+    const C_next = Array.from({length:L}, ()=> new Array(year).fill(0));
     if (t > 1){
-      for (let k=0; k<t-1; k++){
-        for (let a=1; a<L; a++){
-          // aged_cohort(2:end) = C_after(1:end-1,k)
-          C_next[a][k+1] = C_after[a-1][k];
-        }
-      }
+      for (let k=0; k<t-1; k++) for (let a=1; a<L; a++) C_next[a][k+1] = C_after[a-1][k];
     }
-
     const out_total = out_P.reduce((s,x)=>s+x,0) + out_C_all_sum;
-    for (let a=0; a<L; a++){
-      C_next[a][0] = out_total * inflow_weight[a];
-    }
-
-    // record
+    for (let a=0; a<L; a++) C_next[a][0] = out_total * inflow_weight[a];
     for (let a=0; a<L; a++) P[a][t] = P_next[a];
     C = C_next;
   }
-
   return { C, P };
 }
 
-/** =========================
- * matrix_novac_to_full(param, year, v_t, epsilon)  (MATLAB 동일)
- * out: pop_matrix = [Full, Part, Neg] each is (T+1) x 42 for final T=year
- * ========================= */
 function matrixNoVacToFull(param, year, v_t, epsilon){
-  const tspan = Array.from({length: 51+20+year + 1}, (_,i)=>i); // 0:...
+  const tspan = Array.from({length: 51+20+year + 1}, (_,i)=>i);
   const IMM_G1 = EstImm(param, tspan, 400);
-
-  // IMM_G2 28 x 3
   const g2full = [78,88,78,97,92,91,94,98,100,96,91,98,98,90,96,94,97,91,87,97,100,93,96,96,100,100,100,93].map(v=>v/100);
   const IMM_G2 = g2full.map(v => [v, 0, 1-v]);
-
-  const Q0 = pdePop(year, epsilon).C; // 42 x year
-
+  const Q0 = pdePop(year, epsilon).C;
   let pop_matrix = null;
-
   for (let T=1; T<=year; T++){
     const res = pdePop(T, epsilon);
-    const P = res.P; // 42 x (T+1)
-
-    pop_matrix = [
-      Array.from({length:T+1}, ()=> new Array(42).fill(0)), // Full
-      Array.from({length:T+1}, ()=> new Array(42).fill(0)), // Part
-      Array.from({length:T+1}, ()=> new Array(42).fill(0)), // Neg
-    ];
-
+    const P = res.P;
+    pop_matrix = [Array.from({length:T+1}, ()=>new Array(42).fill(0)), Array.from({length:T+1}, ()=>new Array(42).fill(0)), Array.from({length:T+1}, ()=>new Array(42).fill(0))];
     const limit_idx = Math.min(7+T, 42);
-
-    // Incumbents: IMM_G1(15:14+limit_idx,i) .* P(1:limit_idx,T+1)
-    // MATLAB row r corresponds t = r-1. So row 15 => t=14.
-    for (let i=0; i<3; i++){
-      for (let a=0; a<limit_idx; a++){
-        const t_imm = 14 + a;
-        const imm = (i===0?IMM_G1.Full[t_imm] : i===1?IMM_G1.Part[t_imm] : IMM_G1.Neg[t_imm]);
-        pop_matrix[i][0][a] = imm * P[a][T];
-      }
+    for (let i=0; i<3; i++) for (let a=0; a<limit_idx; a++){
+      const t_imm = 14 + a;
+      const imm = (i===0?IMM_G1.Full[t_imm] : i===1?IMM_G1.Part[t_imm] : IMM_G1.Neg[t_imm]);
+      pop_matrix[i][0][a] = imm * P[a][T];
     }
-
-    // Recruits j=2..T+1
     for (let j=2; j<=T+1; j++){
-      const tenure = j-1;
-      const recruit_year = T - tenure + 1;
-
+      const tenure = j-1, recruit_year = T - tenure + 1;
       let pop_count = new Array(limit_idx).fill(0);
-      if (tenure <= Q0[0].length){
-        for (let a=0; a<limit_idx; a++) pop_count[a] = Q0[a][tenure-1];
-      }
-
+      if (tenure <= Q0[0].length) for (let a=0; a<limit_idx; a++) pop_count[a] = Q0[a][tenure-1];
       if (recruit_year <= v_t){
-        // unvaccinated: age-based IMM_G1(15..)
-        for (let i=0; i<3; i++){
-          for (let a=0; a<limit_idx; a++){
-            const t_imm = 14 + a;
-            const imm = (i===0?IMM_G1.Full[t_imm] : i===1?IMM_G1.Part[t_imm] : IMM_G1.Neg[t_imm]);
-            pop_matrix[i][j-1][a] = pop_count[a] * imm;
-          }
+        for (let i=0; i<3; i++) for (let a=0; a<limit_idx; a++){
+          const t_imm = 14 + a;
+          const imm = (i===0?IMM_G1.Full[t_imm] : i===1?IMM_G1.Part[t_imm] : IMM_G1.Neg[t_imm]);
+          pop_matrix[i][j-1][a] = pop_count[a] * imm;
         }
       } else {
-        // vaccinated: tenure-based IMM_G1(j,i) => row j => t=j-1
-        let imm_idx_V = j;
-        if (imm_idx_V > tspan.length) imm_idx_V = tspan.length;
-        const tV = (imm_idx_V - 1);
-
+        const tV = j-1;
         for (let i=0; i<3; i++){
           const immV = (i===0?IMM_G1.Full[tV] : i===1?IMM_G1.Part[tV] : IMM_G1.Neg[tV]);
-          for (let a=0; a<limit_idx; a++){
-            pop_matrix[i][j-1][a] = pop_count[a] * immV;
-          }
+          for (let a=0; a<limit_idx; a++) pop_matrix[i][j-1][a] = pop_count[a] * immV;
         }
       }
     }
-
-    // G2/G3: i in [1,3] => Full & Neg only
-    for (const i of [0, 2]){ // 0=Full, 2=Neg
-      const idx_start = 8 + T;       // 1-based
-      const idx_end   = Math.min(42, 35 + T);
+    for (const i of [0, 2]){
+      const idx_start = 8 + T, idx_end = Math.min(42, 35 + T);
       if (idx_start <= 42){
-        const start0 = idx_start - 1;
-        const end0 = idx_end - 1;
-        const len_req = end0 - start0 + 1;
-
+        const start0 = idx_start - 1, len_req = (idx_end - 1) - start0 + 1;
         let G2_probs = new Array(len_req).fill(0);
         if (T > 7){
-          // g2_idx = T-6:28 (1-based), trim to len_req
-          const g2_idx = [];
-          for (let k=(T-6); k<=28; k++) g2_idx.push(k);
+          const g2_idx = []; for (let k=(T-6); k<=28; k++) g2_idx.push(k);
           const g2_trim = g2_idx.slice(0, len_req).map(v=>v-1);
-          for (let m=0; m<len_req; m++){
-            G2_probs[m] = IMM_G2[g2_trim[m]][i];
-          }
-        } else {
-          for (let m=0; m<len_req; m++){
-            G2_probs[m] = IMM_G2[m][i];
-          }
-        }
-
-        // incumbents
-        for (let m=0; m<len_req; m++){
-          const a = start0 + m;
-          pop_matrix[i][0][a] = G2_probs[m] * P[a][T];
-        }
-
-        // recruits
+          for (let m=0; m<len_req; m++) G2_probs[m] = IMM_G2[g2_trim[m]][i];
+        } else { for (let m=0; m<len_req; m++) G2_probs[m] = IMM_G2[m][i]; }
+        for (let m=0; m<len_req; m++){ const a = start0 + m; pop_matrix[i][0][a] = G2_probs[m] * P[a][T]; }
         for (let j=2; j<=T+1; j++){
-          const tenure = j-1;
-          const recruit_year = T - tenure + 1;
-
-          let pop_count = new Array(len_req).fill(0);
-          if (tenure <= Q0[0].length){
-            for (let m=0; m<len_req; m++){
-              const a = start0 + m;
-              pop_count[m] = Q0[a][tenure-1];
-            }
-          }
-
+          const tenure = j-1, recruit_year = T - tenure + 1;
           if (recruit_year <= v_t){
-            // unvaccinated
-            for (let m=0; m<len_req; m++){
-              const a = start0 + m;
-              pop_matrix[i][j-1][a] = pop_count[m] * G2_probs[m];
-            }
+            for (let m=0; m<len_req; m++) pop_matrix[i][j-1][start0+m] = ((tenure<=Q0[0].length)?Q0[start0+m][tenure-1]:0) * G2_probs[m];
           } else {
-            // vaccinated -> 100% Full
-            for (let m=0; m<len_req; m++){
-              const a = start0 + m;
-              if (i === 0) pop_matrix[i][j-1][a] = pop_count[m] * 1.0;
-              else pop_matrix[i][j-1][a] = 0.0;
-            }
+            for (let m=0; m<len_req; m++) pop_matrix[i][j-1][start0+m] = (i===0 && tenure<=Q0[0].length) ? Q0[start0+m][tenure-1] : 0;
           }
         }
-      }
-    }
-
-    // S3 fix (MATLAB 코드 그대로 유지)
-    const S3 = [38,38,37,37,37,37,37];
-    if (T < 7){
-      const from = 36 + T; // 1-based
-      for (let col=from; col<=42; col++){
-        const idx = col - from;
-        pop_matrix[0][0][col-1] = S3[idx];
       }
     }
   }
-
-  return pop_matrix; // final T=year
+  return pop_matrix;
 }
 
-/** =========================
- * matrix_novac_to_neg(param, year, v_t, epsilon)  (MATLAB 동일)
- * ========================= */
 function matrixNoVacToNeg(param, year, v_t, epsilon){
-  const tspan = Array.from({length: 51+20+year + 1}, (_,i)=>i);
+  const clamp = (x, lo, hi) => Math.min(Math.max(x, lo), hi);
+  const tspan = Array.from({length: 51 + 20 + year + 1}, (_, i) => i);
   const IMM_G1 = EstImm(param, tspan, 400);
-
-  const g2full = [78,88,78,97,92,91,94,98,100,96,91,98,98,90,96,94,97,91,87,97,100,93,96,96,100,100,100,93].map(v=>v/100);
-  const IMM_G2 = g2full.map(v => [v, 0, 1-v]);
-
+  const g2full = [78,88,78,97,92,91,94,98,100,96,91,98,98,90,96,94,97,91,87,97,100,93,96,96,100,100,100,93].map(v => v/100);
+  const IMM_G2 = g2full.map(v => [v, 0, 1 - v]);
   const resY = pdePop(year, epsilon);
-  const Q0 = resY.C; // 42 x year
+  const Q0 = resY.C;
   const G1_Neg = IMM_G1.Neg;
-
-  // Q1_ size(Q0)
-  const Q1_ = Array.from({length:42}, ()=> new Array(year).fill(0));
-
-  // policy loop
+  const Q1_ = Array.from({length: 42}, () => new Array(year).fill(0));
   const max_row = 42;
-  for (let T=1; T<=year; T++){
+  for (let T = 1; T <= year; T++){
     if (T > v_t){
       const idx_limit = Math.min(T + 7, max_row);
-
-      // Neg_vaccination = Q0(1:idx_limit,1) .* G1_Neg(19:(19-1)+idx_limit)
-      // MATLAB row 19 => t=18
       const Neg_vaccination = new Array(idx_limit);
-      for (let a=0; a<idx_limit; a++){
-        Neg_vaccination[a] = Q0[a][0] * G1_Neg[18 + a];
+      for (let a = 0; a < idx_limit; a++){
+        Neg_vaccination[a] = (Q0[a][0] || 0) * (G1_Neg[18 + a] || 0);
       }
-
-      // Q_ratio = [zeros(min(year-T,42),1); Neg_vaccination ./ Q0(1:idx_limit,1)];
       const zerosLen = Math.min(year - T, 42);
       const Q_ratio = [];
-      for (let z=0; z<zerosLen; z++) Q_ratio.push(0);
-
-      for (let a=0; a<idx_limit; a++){
-        const denom = Q0[a][0];
-        Q_ratio.push(denom > 0 ? (Neg_vaccination[a]/denom) : 0);
+      for (let z = 0; z < zerosLen; z++) Q_ratio.push(0);
+      for (let a = 0; a < idx_limit; a++){
+        const denom = Q0[a][0] || 0;
+        Q_ratio.push(denom > 0 ? (Neg_vaccination[a] / denom) : 0);
       }
-
-      // assign Q1_(1:size(Q_ratio,1), year-T+1)
-      const col = year - T; // 0-based
+      const col = year - T;
       const L = Math.min(42, Q_ratio.length);
-      for (let r=0; r<L; r++){
+      for (let r = 0; r < L; r++){
         const v = Q_ratio[r];
         Q1_[r][col] = Number.isFinite(v) ? v : 0;
       }
     }
   }
-
-  // V = Q0.*Q1_, Q = Q0.*(1-Q1_)
-  const V = Array.from({length:42}, ()=> new Array(year).fill(0));
-  const Q = Array.from({length:42}, ()=> new Array(year).fill(0));
-  for (let a=0; a<42; a++){
-    for (let k=0; k<year; k++){
-      V[a][k] = Q0[a][k] * Q1_[a][k];
-      Q[a][k] = Q0[a][k] * (1 - Q1_[a][k]);
+  const V = Array.from({length: 42}, () => new Array(year).fill(0));
+  const Q = Array.from({length: 42}, () => new Array(year).fill(0));
+  for (let a = 0; a < 42; a++){
+    for (let k = 0; k < year; k++){
+      const q0 = Q0[a][k] || 0;
+      const q1 = Q1_[a][k] || 0;
+      V[a][k] = q0 * q1;
+      Q[a][k] = q0 * (1 - q1);
     }
   }
-
   let pop_matrix = null;
-
-  for (let T=1; T<=year; T++){
+  for (let T = 1; T <= year; T++){
     const res = pdePop(T, epsilon);
     const P = res.P;
     const C = res.C;
-
     pop_matrix = [
-      Array.from({length:T+1}, ()=> new Array(42).fill(0)),
-      Array.from({length:T+1}, ()=> new Array(42).fill(0)),
-      Array.from({length:T+1}, ()=> new Array(42).fill(0)),
+      Array.from({length: T + 1}, () => new Array(42).fill(0)),
+      Array.from({length: T + 1}, () => new Array(42).fill(0)),
+      Array.from({length: T + 1}, () => new Array(42).fill(0)),
     ];
-
-    const idx_limit = Math.min(7+T, max_row);
-
-    for (let i=0; i<3; i++){
-      // incumbents
-      for (let a=0; a<idx_limit; a++){
-        const t_imm = 14 + a; // row 15 => t=14
-        const imm = (i===0?IMM_G1.Full[t_imm] : i===1?IMM_G1.Part[t_imm] : IMM_G1.Neg[t_imm]);
-        pop_matrix[i][0][a] = imm * P[a][T];
+    const idx_limit = Math.min(7 + T, max_row);
+    for (let i = 0; i < 3; i++){
+      for (let a = 0; a < idx_limit; a++){
+        const t_imm = 14 + a;
+        const imm = (i===0 ? (IMM_G1.Full[t_imm] || 0) : i===1 ? (IMM_G1.Part[t_imm] || 0) : (IMM_G1.Neg[t_imm] || 0));
+        pop_matrix[i][0][a] = imm * (P[a][T] || 0);
       }
-
-      // recruits
-      for (let j=2; j<=T+1; j++){
-        for (let a=0; a<idx_limit; a++){
+      for (let j = 2; j <= T + 1; j++){
+        for (let a = 0; a < idx_limit; a++){
           const t_age = 14 + a;
-          const imm_age = (i===0?IMM_G1.Full[t_age] : i===1?IMM_G1.Part[t_age] : IMM_G1.Neg[t_age]);
-
-          // IMM_G1(j-1,i) -> row (j-1) => t=(j-2)
-          const t_tenure = (j-2);
-          const imm_ten = (i===0?IMM_G1.Full[t_tenure] : i===1?IMM_G1.Part[t_tenure] : IMM_G1.Neg[t_tenure]);
-
-          const qPop = Q[a][j-2] ?? 0; // Q(., j-1) in MATLAB => col j-2
-          const vPop = V[a][j-2] ?? 0;
-
-          pop_matrix[i][j-1][a] = imm_age * qPop + imm_ten * vPop;
+          const imm_age = (i===0 ? (IMM_G1.Full[t_age] || 0) : i===1 ? (IMM_G1.Part[t_age] || 0) : (IMM_G1.Neg[t_age] || 0));
+          const t_tenure = (j - 2);
+          const imm_ten = (i===0 ? (IMM_G1.Full[t_tenure] || 0) : i===1 ? (IMM_G1.Part[t_tenure] || 0) : (IMM_G1.Neg[t_tenure] || 0));
+          const qPop = (Q[a] && Q[a][j - 2]) ? Q[a][j - 2] : 0;
+          const vPop = (V[a] && V[a][j - 2]) ? V[a][j - 2] : 0;
+          pop_matrix[i][j - 1][a] = imm_age * qPop + imm_ten * vPop;
         }
       }
     }
-
-    // G2/G3 (i=[1,3] only)
-    for (const i of [0,2]){
+    for (const i of [0, 2]){
       const idx_start = 8 + T;
-      const idx_end = Math.min(42, 35+T);
+      const idx_end = Math.min(42, 35 + T);
       if (idx_start <= 42){
         const start0 = idx_start - 1;
         const end0 = idx_end - 1;
         const len = end0 - start0 + 1;
-
-        // incumbents
-        for (let m=0; m<len; m++){
+        for (let m = 0; m < len; m++){
           const a = start0 + m;
-          const g2row = (T > 7) ? clamp((T-6-1) + m, 0, 27) : m; // T-6:28 (1-based)
-          pop_matrix[i][0][a] = IMM_G2[g2row][i] * P[a][T];
+          const g2row = (T > 7) ? clamp((T - 6 - 1) + m, 0, 27) : m;
+          pop_matrix[i][0][a] = (IMM_G2[g2row]?.[i] || 0) * (P[a][T] || 0);
         }
-
-        // recruits: use res{1,1} = C(:,j-1)
-        for (let j=2; j<=T+1; j++){
-          for (let m=0; m<len; m++){
+        for (let j = 2; j <= T + 1; j++){
+          for (let m = 0; m < len; m++){
             const a = start0 + m;
-            const g2row = (T > 7) ? clamp((T-6-1) + m, 0, 27) : m;
-            const pop = (j-2 < C[0].length) ? C[a][j-2] : 0;
-            pop_matrix[i][j-1][a] = IMM_G2[g2row][i] * pop;
+            const g2row = (T > 7) ? clamp((T - 6 - 1) + m, 0, 27) : m;
+            const pop = (C[a] && (j - 2) < C[a].length) ? (C[a][j - 2] || 0) : 0;
+            pop_matrix[i][j - 1][a] = (IMM_G2[g2row]?.[i] || 0) * pop;
           }
         }
       }
     }
-
-    // S3 fix
     const S3 = [38,38,37,37,37,37,37];
     if (T < 7){
       const from = 36 + T;
-      for (let col=from; col<=42; col++){
+      for (let col = from; col <= 42; col++){
         const idx = col - from;
-        pop_matrix[0][0][col-1] = S3[idx];
+        pop_matrix[0][0][col - 1] = S3[idx];
       }
     }
   }
-
   return pop_matrix;
 }
 
-/** =========================
- * run_simulation (mu_1_sensitivity.m 동일)
- * ========================= */
-function runSimulation(funcName, theta, t_span, v_t, epsilon){
-  const pop_matrix = (funcName === 'to_full')
-    ? matrixNoVacToFull(theta, t_span, v_t, epsilon)
-    : matrixNoVacToNeg(theta, t_span, v_t, epsilon);
-
-  let p_full=0, p_part=0, p_neg=0;
-  // sum(sum(pop_matrix{i}))
-  for (let r=0; r<pop_matrix[0].length; r++){
-    for (let c=0; c<pop_matrix[0][r].length; c++){
-      p_full += pop_matrix[0][r][c];
-      p_part += pop_matrix[1][r][c];
-      p_neg  += pop_matrix[2][r][c];
-    }
-  }
-  return [p_full/N_TOT, p_part/N_TOT, p_neg/N_TOT];
+function runSimulation(func, theta, t_span, v_t, epsilon){
+  const pm = func(theta, t_span, v_t, epsilon);
+  let f=0, p=0, n=0;
+  for (let i=0; i<pm[0].length; i++) for (let j=0; j<pm[0][i].length; j++){ f+=pm[0][i][j]; p+=pm[1][i][j]; n+=pm[2][i][j]; }
+  return [f/N_TOT, p/N_TOT, n/N_TOT];
 }
 
 /** =========================
- * Charts
+ * Ternary Plot Drawing Logic
  * ========================= */
-let charts = { base:null, s1:null, s2:null, ind:null };
+function drawTernaryFrame(ctx, w, h_tri) {
+  const { marginLeft, marginRight, marginTop, marginBottom } = LAYOUT;
+  
+  const triW = w - marginLeft - marginRight;
+  const triCenterX = marginLeft + triW / 2;
+  
+  const topY = marginTop;
+  const bottomY = marginTop + h_tri;
+  const leftX = marginLeft;
+  const rightX = marginLeft + triW;
 
-function makeScenarioChart(ctx){
-  return new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: MU_RANGE,
-      datasets: [
-        { label:'S_Full', data:[], borderColor:C_FULL, backgroundColor:C_FULL, pointStyle:'triangle', pointRadius:3, borderWidth:2, tension:0.1 },
-        { label:'S_Part', data:[], borderColor:C_PART, backgroundColor:C_PART, pointStyle:'rect', pointRadius:3, borderWidth:2, tension:0.1 },
-        { label:'S_Neg',  data:[], borderColor:C_NEG,  backgroundColor:C_NEG,  pointStyle:'circle', pointRadius:3, borderWidth:2, tension:0.1 },
-      ]
-    },
-    options: {
-      responsive:true,
-      maintainAspectRatio:false,
-      plugins:{ legend:{ display:false } },
-      scales:{
-        y:{ min:0, max:1, ticks:{ stepSize:0.2 }, grid:{ color:'#f1f5f9' } },
-        x:{ title:{ display:true, text:'μ1', font:{ size:10 } }, grid:{ display:false } }
-      }
-    }
-  });
+  ctx.clearRect(0, 0, w, h_tri + marginTop + marginBottom + 50);
+
+  // Background patches (Shading)
+  // 투명도를 0.05 -> 0.1로 높여서 잘 보이게 수정
+  const h = h_tri;
+  
+  // Full area (Blue)
+  ctx.fillStyle = 'rgba(0, 0, 255, 0.1)';
+  ctx.beginPath();
+  ctx.moveTo(triCenterX, topY + h/2); ctx.lineTo(triCenterX - triW/4, topY + h/2); ctx.lineTo(triCenterX, topY); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(triCenterX, topY + h/2); ctx.lineTo(triCenterX + triW/4, topY + h/2); ctx.lineTo(triCenterX, topY); ctx.fill();
+
+  // Part area (Yellow)
+  ctx.fillStyle = 'rgba(255, 255, 0, 0.1)';
+  ctx.beginPath();
+  ctx.moveTo(triCenterX, bottomY); ctx.lineTo(rightX, bottomY); ctx.lineTo(triCenterX + triW/4, topY + h/2); ctx.fill();
+
+  // Neg area (Red)
+  ctx.fillStyle = 'rgba(255, 0, 0, 0.1)';
+  ctx.beginPath();
+  ctx.moveTo(leftX, bottomY); ctx.lineTo(triCenterX, bottomY); ctx.lineTo(triCenterX - triW/4, topY + h/2); ctx.fill();
+
+  // Frame
+  ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(leftX, bottomY); ctx.lineTo(rightX, bottomY); ctx.lineTo(triCenterX, topY); ctx.closePath(); ctx.stroke();
+
+  // Mid-lines
+  ctx.setLineDash([5, 5]); ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(triCenterX, bottomY); ctx.lineTo(triCenterX + triW/4, topY + h/2); ctx.lineTo(triCenterX - triW/4, topY + h/2); ctx.closePath(); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Labels
+  ctx.font = 'bold 16px sans-serif'; 
+  
+  ctx.fillStyle = C_FULL; ctx.textAlign = 'center'; 
+  ctx.fillText('S_Full', triCenterX, topY - 15);
+  
+  ctx.fillStyle = C_NEG;  ctx.textAlign = 'right';  
+  ctx.fillText('S_Neg', leftX - 10, bottomY + 5);
+  
+  ctx.fillStyle = C_PART; ctx.textAlign = 'left';   
+  ctx.fillText('S_Part', rightX + 10, bottomY + 5);
 }
+
+function toScreen(data, w, h_tri) {
+  const { marginLeft, marginRight, marginTop } = LAYOUT;
+  const triW = w - marginLeft - marginRight;
+  
+  const full = data[0], part = data[1], neg = data[2];
+  const x = marginLeft + triW * (part + 0.5 * full);
+  const y = (marginTop + h_tri) - h_tri * full;
+  return { x, y };
+}
+
+/** =========================
+ * Main App Logic
+ * ========================= */
+let charts = { base:null, s1:null, s2:null };
 
 function initCharts(){
-  charts.base = makeScenarioChart(document.getElementById('chartBase'));
-  charts.s1   = makeScenarioChart(document.getElementById('chartS1'));
-  charts.s2   = makeScenarioChart(document.getElementById('chartS2'));
-
-  charts.ind = new Chart(document.getElementById('individualChart'), {
-    type:'line',
-    data:{
-      labels: Array.from({length: 51+20+T_SPAN+1}, (_,i)=>i), // tspan(0:..)
-      datasets:[
-        { label:'Full', data:[], borderColor:C_FULL, fill:false, pointRadius:0, borderWidth:2 },
-        { label:'Part', data:[], borderColor:C_PART, fill:false, pointRadius:0, borderWidth:2 },
-        { label:'Neg',  data:[], borderColor:C_NEG,  fill:false, pointRadius:0, borderWidth:2 },
-      ]
-    },
-    options:{
-      responsive:true,
-      maintainAspectRatio:false,
-      plugins:{ legend:{ display:false } },
-      scales:{
-        y:{ min:0, max:1, display:false },
-        x:{ display:true, ticks:{ maxTicksLimit:6 } }
-      }
-    }
+  const cfg = (ctx) => ({
+    type: 'line',
+    data: { labels: MU_RANGE, datasets: [
+      { label:'S_Full', data:[], borderColor:C_FULL, backgroundColor:C_FULL, pointStyle:'triangle', pointRadius:3, tension:0.1 },
+      { label:'S_Part', data:[], borderColor:C_PART, backgroundColor:C_PART, pointStyle:'rect', pointRadius:3, tension:0.1 },
+      { label:'S_Neg',  data:[], borderColor:C_NEG,  backgroundColor:C_NEG,  pointStyle:'circle', pointRadius:3, tension:0.1 }
+    ]},
+    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{min:0, max:1}, x:{title:{display:true, text:'μ1'}} } }
   });
+  charts.base = new Chart(document.getElementById('chartBase'), cfg());
+  charts.s1   = new Chart(document.getElementById('chartS1'), cfg());
+  charts.s2   = new Chart(document.getElementById('chartS2'), cfg());
+
+  // 차트 초기화 시점에 빈 Ternary 프레임 먼저 그리기
+  initTernary();
 }
 
-function updateIndividualChart(mu1){
-  const theta = [1, mu1, 1, 0];
-  const tspan = Array.from({length: 51+20+T_SPAN+1}, (_,i)=>i);
-  const imm = EstImm(theta, tspan, 400);
+// 캔버스 크기 계산 및 초기 프레임 그리기 함수 (분리)
+function initTernary() {
+  const canvas = document.getElementById('ternaryChart');
+  const ctx = canvas.getContext('2d');
+  
+  // 안전장치: offsetWidth가 0이면 기본값 600 사용
+  const w = canvas.width = (canvas.offsetWidth || 800);
+  
+  const { marginLeft, marginRight, marginTop, marginBottom } = LAYOUT;
+  const triW = w - marginLeft - marginRight;
+  const h_tri = triW * (Math.sqrt(3)/2);
+  
+  canvas.height = h_tri + marginTop + marginBottom;
 
-  charts.ind.data.datasets[0].data = imm.Full;
-  charts.ind.data.datasets[1].data = imm.Part;
-  charts.ind.data.datasets[2].data = imm.Neg;
-  charts.ind.update();
-
-  document.getElementById('mu1Display').innerText = mu1;
+  drawTernaryFrame(ctx, w, h_tri);
+  return { ctx, w, h_tri };
 }
 
-function setStatus(msg){ document.getElementById('status').innerText = msg; }
-
-/** =========================
- * Run sweep (epsilon only)
- * ========================= */
 async function runSweep(){
   const btn = document.getElementById('runBtn');
-  const eps = parseFloat(document.getElementById('epsilonInput').value);
-  if (!Number.isFinite(eps) || eps < 0){
-    setStatus('epsilon 값이 올바르지 않습니다.');
-    return;
+  const eps = parseFloat(document.getElementById('epsilonInput').value) || 0;
+  btn.disabled = true; btn.innerHTML = '⏳ 계산 중...';
+
+  try {
+      // 1. 계산 시작 전, 프레임 리셋 (크기 재조정)
+      const { ctx, w, h_tri } = initTernary();
+
+      const resB = [], resS1 = [], resS2 = [];
+      for (let mu1 of MU_RANGE){
+        const theta = [1, mu1, 1, 0];
+        resB.push(runSimulation(matrixNoVacToFull, theta, T_SPAN, 50, eps));
+        resS1.push(runSimulation(matrixNoVacToNeg, theta, T_SPAN, 0, eps));
+        resS2.push(runSimulation(matrixNoVacToFull, theta, T_SPAN, 0, eps));
+        if (mu1 % 5 === 0) await new Promise(r=>setTimeout(r,0));
+      }
+
+      // Update Line Charts
+      const updateLine = (chart, data) => {
+        chart.data.datasets[0].data = data.map(d=>d[0]);
+        chart.data.datasets[1].data = data.map(d=>d[1]);
+        chart.data.datasets[2].data = data.map(d=>d[2]);
+        chart.update();
+      };
+      updateLine(charts.base, resB);
+      updateLine(charts.s1, resS1);
+      updateLine(charts.s2, resS2);
+
+      // 2. Draw Dots (프레임 위에 덧그리기)
+      // 이미 initTernary에서 drawTernaryFrame을 호출했으므로 여기서는 drawDots만 호출하면 되지만,
+      // 혹시 모를 겹침 방지를 위해 다시 클리어하고 그려도 됨. 
+      // 여기서는 덮어쓰기 위해 다시 호출 (배경 유지)
+      drawTernaryFrame(ctx, w, h_tri);
+
+      const drawDots = (data, color, label) => {
+        // Line
+        ctx.strokeStyle = color; 
+        ctx.lineWidth = 1;
+        ctx.globalAlpha = 0.3;
+        ctx.beginPath();
+        data.forEach((d, i) => {
+          const p = toScreen(d, w, h_tri);
+          if(i===0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+        });
+        ctx.stroke();
+        ctx.globalAlpha = 1.0; 
+
+        // Dots
+        ctx.fillStyle = color;
+        data.forEach((d, i) => {
+          const p = toScreen(d, w, h_tri);
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 3, 0, Math.PI*2); 
+          ctx.fill();
+        });
+
+        // Start (Circle)
+        const p1 = toScreen(data[0], w, h_tri);
+        ctx.fillStyle = '#fff'; ctx.strokeStyle = color; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(p1.x, p1.y, 5, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+
+        // End (X)
+        const pEnd = toScreen(data[data.length-1], w, h_tri);
+        ctx.strokeStyle = color; ctx.lineWidth = 3;
+        const size = 5;
+        ctx.beginPath();
+        ctx.moveTo(pEnd.x - size, pEnd.y - size); ctx.lineTo(pEnd.x + size, pEnd.y + size);
+        ctx.moveTo(pEnd.x + size, pEnd.y - size); ctx.lineTo(pEnd.x - size, pEnd.y + size);
+        ctx.stroke();
+      };
+
+      drawDots(resB, '#000', 'Base');
+      drawDots(resS1, COLOR_S1, 'S1');
+      drawDots(resS2, COLOR_S2, 'S2');
+
+      // Legend
+      const drawLegend = () => {
+        const lx = w - 110, ly = 30;
+        ctx.textAlign = 'left';
+        
+        ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(lx, ly, 3, 0, Math.PI*2); ctx.fill();
+        ctx.font = '12px sans-serif'; ctx.fillStyle = '#000'; ctx.fillText('Baseline', lx + 12, ly + 4);
+
+        ctx.fillStyle = COLOR_S1; ctx.beginPath(); ctx.arc(lx, ly + 20, 3, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = COLOR_S1; ctx.fillText('Scenario 1', lx + 12, ly + 24);
+
+        ctx.fillStyle = COLOR_S2; ctx.beginPath(); ctx.arc(lx, ly + 40, 3, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = COLOR_S2; ctx.fillText('Scenario 2', lx + 12, ly + 44);
+
+        const markerY = ly + 70;
+        ctx.fillStyle = '#999'; ctx.fillRect(lx - 5, markerY - 10, 100, 1);
+
+        ctx.strokeStyle = '#555'; ctx.lineWidth = 2; ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(lx, markerY, 4, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#555'; ctx.fillText('μ1 = 1', lx + 12, markerY + 4);
+
+        const xY = markerY + 20;
+        ctx.beginPath(); 
+        ctx.moveTo(lx - 3, xY - 3); ctx.lineTo(lx + 3, xY + 3);
+        ctx.moveTo(lx + 3, xY - 3); ctx.lineTo(lx - 3, xY + 3);
+        ctx.stroke();
+        ctx.fillText('μ1 = 23', lx + 12, xY + 4);
+      }
+      drawLegend();
+
+  } catch(e) {
+      console.error(e);
+      document.getElementById('status').innerText = 'Error: ' + e.message;
+  } finally {
+      btn.innerHTML = '🔄 실행 (μ1=1..23 Sweep)'; btn.disabled = false;
   }
-
-  btn.disabled = true;
-  btn.innerHTML = '⏳ 계산 중...';
-  setStatus(`Running... (ε=${eps})`);
-
-  const results_base = [];
-  const results_s1 = [];
-  const results_s2 = [];
-
-  for (let i=0; i<MU_RANGE.length; i++){
-    const mu1 = MU_RANGE[i];
-    const theta = [1, mu1, 1, 0];
-
-    // MATLAB: Baseline v_t=50, to_full
-    results_base.push(runSimulation('to_full', theta, T_SPAN, 50, eps));
-
-    // MATLAB: S#1 v_t=0, to_neg
-    results_s1.push(runSimulation('to_neg', theta, T_SPAN, 0, eps));
-
-    // MATLAB: S#2 v_t=0, to_full
-    results_s2.push(runSimulation('to_full', theta, T_SPAN, 0, eps));
-
-    // yield to UI
-    if (i % 2 === 0) await new Promise(r=>setTimeout(r,0));
-  }
-
-  // update charts (order: [full, part, neg])
-  function apply(chart, arr){
-    chart.data.datasets[0].data = arr.map(x=>x[0]);
-    chart.data.datasets[1].data = arr.map(x=>x[1]);
-    chart.data.datasets[2].data = arr.map(x=>x[2]);
-    chart.update();
-  }
-
-  apply(charts.base, results_base);
-  apply(charts.s1, results_s1);
-  apply(charts.s2, results_s2);
-
-  // stats at mu1=12 (index 11)
-  const idx = 11;
-  const bF = results_base[idx][0];
-  const s1F = results_s1[idx][0];
-  const s2F = results_s2[idx][0];
-
-  document.getElementById('statBaseFull').innerText = (bF*100).toFixed(1) + '%';
-  document.getElementById('statS1Gain').innerText = '+' + ((s1F-bF)*100).toFixed(1) + '%';
-  document.getElementById('statS2Gain').innerText = '+' + ((s2F-bF)*100).toFixed(1) + '%';
-
-  btn.innerHTML = '✓ 완료!';
-  setStatus(`Done. (ε=${eps})`);
-  setTimeout(()=>{
-    btn.innerHTML = '🔄 실행 (μ1=1..23 Sweep)';
-    btn.disabled = false;
-  }, 800);
 }
 
-/** =========================
- * Init
- * ========================= */
-document.addEventListener('DOMContentLoaded', ()=>{
-  initCharts();
-  updateIndividualChart(12);
-
-  document.getElementById('mu1Slider').addEventListener('input', (e)=>{
-    updateIndividualChart(parseInt(e.target.value, 10));
-  });
-
+document.addEventListener('DOMContentLoaded', () => {
+  initCharts(); // initTernary()가 내부에서 호출됨
   document.getElementById('runBtn').addEventListener('click', runSweep);
-
-  // initial run like your old page did
   runSweep();
 });
 </script>
